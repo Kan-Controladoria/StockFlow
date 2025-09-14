@@ -97,6 +97,12 @@ export function WarehouseMap() {
                   const compartment = corridorCompartments.find(c => c.address === address)
                   const stockCount = compartment?.stock.reduce((sum, s) => sum + s.quantity, 0) || 0
                   
+                  // Only render if compartment exists (should always exist since all 150 are in DB)
+                  if (!compartment) {
+                    console.warn(`Compartment ${address} not found in query results`)
+                    return null
+                  }
+                  
                   return (
                     <Button
                       key={address}
@@ -105,7 +111,7 @@ export function WarehouseMap() {
                         aspect-square p-0 text-xs font-medium compartment-cell
                         ${stockCount > 0 ? 'compartment-with-stock bg-green-50 border-green-200 hover:bg-green-100' : ''}
                       `}
-                      onClick={() => compartment && openCompartment(compartment)}
+                      onClick={() => openCompartment(compartment)}
                       data-stock-count={stockCount > 0 ? stockCount : ''}
                       data-testid={`compartment-${address}`}
                     >
