@@ -102,9 +102,9 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
           if (error) throw error
         } else {
           // Update stock quantity
-          const { error } = await supabase
+          const { error } = await (supabase as any)
             .from('stock_by_compartment')
-            .update({ quantity: newQuantity, updated_at: new Date().toISOString() } as any)
+            .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
             .eq('id', (existingStock as any).id)
           
           if (error) throw error
