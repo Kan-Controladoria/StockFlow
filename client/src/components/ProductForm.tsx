@@ -42,7 +42,7 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
 
   const mutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      if (product) {
+      if (product && product.id) {
         // Update existing product
         const { error } = await (supabase as any)
           .from('products')
@@ -52,7 +52,10 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
           })
           .eq('id', product.id)
         
-        if (error) throw error
+        if (error) {
+          console.error('Update error:', error)
+          throw error
+        }
       } else {
         // Create new product
         const { error } = await (supabase as any)
@@ -72,9 +75,10 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
       onClose()
     },
     onError: (error: any) => {
+      console.error('Mutation error:', error)
       const message = error.message?.includes('duplicate key') 
         ? 'Código de barras ou código do produto já existe'
-        : 'Erro ao salvar produto'
+        : `Erro ao salvar produto: ${error.message || 'Erro desconhecido'}`
       
       toast({
         title: "Erro",
