@@ -44,7 +44,7 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
     mutationFn: async (data: typeof formData) => {
       if (product) {
         // Update existing product
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('products')
           .update({
             ...data,
@@ -55,7 +55,7 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
         if (error) throw error
       } else {
         // Create new product
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('products')
           .insert(data)
         
