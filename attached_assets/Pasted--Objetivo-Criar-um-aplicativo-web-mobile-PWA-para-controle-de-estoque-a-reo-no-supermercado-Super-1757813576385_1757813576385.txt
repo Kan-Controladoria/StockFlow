@@ -1,0 +1,66 @@
+# Objetivo
+Criar um aplicativo web/mobile (PWA) para controle de estoque aéreo no supermercado Super Kan, conforme especificação do documento “controle estoque aéreo”. O app deve ser responsivo, permitir uso no celular e desktop, e operar 100% no plano gratuito do Replit e do Supabase. Deve suportar:
+
+- Autenticação de usuários (e-mail/senha) via Supabase Auth.
+- Cadastro e importação de produtos (6 campos: código de barras, código_produto, produto, departamento, categoria, subcategoria).
+- Visualização de um mapa 2D dos 150 compartimentos fixos (5 corredores × 3 linhas × 10 colunas – endereços de 1A1 a 5C10), com destaque por corredor/linha/coluna.
+- Consulta de estoque por compartimento e por produto.
+- Entradas e saídas de produtos com leitura de código de barras ou digitação do código_produto.
+- Relatórios por compartimento, por corredor/linha e por produto, com opção de exportar CSV.
+- Controle de permissões conforme políticas RLS definidas (leitura aberta a usuários logados e escrita restrita).
+- Interface em português (BR), com textos claros e intuitivos.
+
+# Ambiente
+- Utilize **React com Vite** e o SDK **@supabase/supabase-js**.
+- As credenciais ficam em variáveis de ambiente:
+  - SUPABASE_URL = "https://xtljjcdpusjumjextmir.supabase.co"
+  - SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh0bGpqY2RwdXNqdW1qZXh0bWlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc3NzE5NTYsImV4cCI6MjA3MzM0Nzk1Nn0.ao2lcp-Oih2nJAfjKnpKow0KRGnTIYAEBxmYeyCq6bU"
+- Não use service_role; todas as operações devem respeitar as políticas RLS já definidas.
+
+# Funcionalidades a implementar
+
+## 1. Autenticação
+- Crie uma tela de login com campos de e-mail e senha.
+- Utilize `supabase.auth.signInWithPassword()` para autenticar.
+- Após login, armazene a sessão e carregue o perfil do usuário a partir da tabela `profiles`.
+
+## 2. Cadastro e importação de produtos
+- Tela “Produtos”:
+  - Formulário para cadastrar/editar produto com os campos definidos.
+  - Botão para importar produtos a partir de um arquivo CSV com cabeçalho “codigo_barras,codigo_produto,produto,departamento,categoria,subcategoria”.
+  - Utilize `supabase.from('products').insert()` e `upsert()` conforme necessário.
+  - Validar unicidade de `codigo_barras` e `codigo_produto`.
+
+## 3. Mapa 2D de compartimentos
+- Tela principal deve exibir uma grade fixa 5×3×10 agrupada por corredor. Cada célula mostra o código do endereço (`corredor|linha|coluna`).
+- Ao clicar em uma célula, abra um modal/drawer que liste:
+  - Produtos armazenados naquele compartimento (`stock_by_compartment` join `products`).
+  - Botões “Entrada” e “Saída”.
+
+## 4. Operações de entrada e saída
+- Modal de movimentação:
+  - Campo para ler o código de barras (via input ou câmera usando getUserMedia) **OU** digitar o `codigo_produto`.
+  - Campo para quantidade.
+  - Ao confirmar:
+    1. Buscar `product_id` via `codigo_barras` ou `codigo_produto`.
+    2. Se tipo = “ENTRADA”: inserir/atualizar linha em `stock_by_compartment` somando a quantidade.
+       Se tipo = “SAIDA”: subtrair a quantidade (não permitir negativo).
+    3. Registrar a operação em `movements` com `user_id = auth.currentUser.id`, `product_id`, `compartment_id`, `tipo`, `qty` e timestamp.
+
+## 5. Relatórios e consultas
+- Filtros no topo para corredor, linha e produto.
+- Quando um produto for selecionado, destacar os compartimentos onde ele se encontra e exibir quantidades.
+- Implementar exportação CSV dos relatórios (utilizando `FileSaver` ou similar).
+
+## 6. Melhores práticas
+- Separar componentes (Login, MapGrid, CompartmentModal, ProductForm, MovementForm).
+- Usar hooks do Supabase para lidar com estados e sessões (ex.: `onAuthStateChange`).
+- Garantir que erros de permissão (RLS) sejam tratados com mensagens amigáveis.
+- Fazer uso de useEffect/useState de forma adequada, evitando consultas desnecessárias.
+- Assegurar que a UI seja “mobile friendly” e utilize elementos touch (botões grandes, modal ocupando a tela).
+
+# Observações finais
+- O mapa de endereços é fixo e não deve ser alterado pela aplicação (tabela `compartments` foi pré-populada com 150 registros).
+- Use Tailwind ou Shadcn UI para estilização, conforme preferir, mantendo um visual limpo e profissional.
+- Documente no README do projeto como configurar o Supabase (inserindo URL e anon key) e como importar produtos.
+Esse prompt fornece ao Agent 3 todas as instruções necessárias para se conectar ao Supabase, criar o front-end com React, lidar com autenticação, cadastro de produtos, mapa de compartimentos, operações de entrada/saída e geração de relatórios. Ele também inclui a URL e a API Key (anon) que devem ser inseridas como secrets no Replit, garantindo que o app seja funcional e seguro.
