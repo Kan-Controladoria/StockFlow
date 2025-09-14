@@ -20,8 +20,8 @@ export function WarehouseMap() {
   const [selectedCompartment, setSelectedCompartment] = useState<CompartmentWithStock | null>(null)
   const [showScanner, setShowScanner] = useState(false)
   const [filters, setFilters] = useState<Filters>({
-    corridor: '',
-    row: '',
+    corridor: 'all',
+    row: 'all',
     product: ''
   })
 
@@ -39,11 +39,11 @@ export function WarehouseMap() {
           )
         `)
 
-      if (filters.corridor) {
+      if (filters.corridor && filters.corridor !== 'all') {
         query = query.eq('corredor', parseInt(filters.corridor))
       }
       
-      if (filters.row) {
+      if (filters.row && filters.row !== 'all') {
         query = query.eq('linha', filters.row)
       }
 
@@ -68,7 +68,7 @@ export function WarehouseMap() {
   })
 
   const clearFilters = () => {
-    setFilters({ corridor: '', row: '', product: '' })
+    setFilters({ corridor: 'all', row: 'all', product: '' })
   }
 
   const openCompartment = (compartment: CompartmentWithStock) => {
@@ -155,7 +155,7 @@ export function WarehouseMap() {
                   <SelectValue placeholder="Todos os Corredores" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos os Corredores</SelectItem>
+                  <SelectItem value="all">Todos os Corredores</SelectItem>
                   {[1, 2, 3, 4, 5].map(c => (
                     <SelectItem key={c} value={c.toString()}>Corredor {c}</SelectItem>
                   ))}
@@ -170,7 +170,7 @@ export function WarehouseMap() {
                   <SelectValue placeholder="Todas as Linhas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas as Linhas</SelectItem>
+                  <SelectItem value="all">Todas as Linhas</SelectItem>
                   {['A', 'B', 'C'].map(r => (
                     <SelectItem key={r} value={r}>Linha {r}</SelectItem>
                   ))}
@@ -215,11 +215,18 @@ export function WarehouseMap() {
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-8">
-            {[1, 2, 3, 4, 5].map(corridor => (
-              <div key={corridor}>
-                {renderCompartmentGrid(corridor)}
-              </div>
-            ))}
+            {(() => {
+              // Determine which corridors to show based on filter
+              const corridorsToShow = filters.corridor === 'all' 
+                ? [1, 2, 3, 4, 5] 
+                : [parseInt(filters.corridor)]
+              
+              return corridorsToShow.map(corridor => (
+                <div key={corridor}>
+                  {renderCompartmentGrid(corridor)}
+                </div>
+              ))
+            })()}
           </div>
         </CardContent>
       </Card>

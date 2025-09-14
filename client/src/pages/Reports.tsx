@@ -19,8 +19,8 @@ export function Reports() {
   const [filters, setFilters] = useState<ReportFilters>({
     startDate: '',
     endDate: '',
-    corridor: '',
-    department: ''
+    corridor: 'all',
+    department: 'all'
   })
 
   // Get summary statistics
@@ -88,13 +88,13 @@ export function Reports() {
       // Filter by corridor and department on client side for simplicity
       let filteredData = data || []
       
-      if (filters.corridor) {
+      if (filters.corridor && filters.corridor !== 'all') {
         filteredData = filteredData.filter((item: any) => 
           item.compartments.corredor === parseInt(filters.corridor)
         )
       }
 
-      if (filters.department) {
+      if (filters.department && filters.department !== 'all') {
         filteredData = filteredData.filter((item: any) => 
           item.products.departamento === filters.department
         )
@@ -193,7 +193,7 @@ export function Reports() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {[1, 2, 3, 4, 5].map(c => (
                     <SelectItem key={c} value={c.toString()}>Corredor {c}</SelectItem>
                   ))}
@@ -211,7 +211,7 @@ export function Reports() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {departments?.map(dept => (
                     <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                   ))}

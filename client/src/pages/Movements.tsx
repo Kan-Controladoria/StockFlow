@@ -19,7 +19,7 @@ export function Movements() {
   const [filters, setFilters] = useState<MovementFilters>({
     startDate: '',
     endDate: '',
-    type: '',
+    type: 'all',
     product: ''
   })
 
@@ -45,7 +45,7 @@ export function Movements() {
         endDate.setHours(23, 59, 59, 999)
         query = query.lte('timestamp', endDate.toISOString())
       }
-      if (filters.type) {
+      if (filters.type && filters.type !== 'all') {
         query = query.eq('tipo', filters.type)
       }
 
@@ -126,7 +126,7 @@ export function Movements() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="ENTRADA">Entrada</SelectItem>
                   <SelectItem value="SAIDA">Saída</SelectItem>
                 </SelectContent>
