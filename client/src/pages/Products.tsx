@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast'
 import { ProductForm } from '../components/ProductForm'
 import type { Product } from '../types/database'
-import { Plus, FileUp, Edit, Trash2, Loader2 } from 'lucide-react'
+import { Plus, FileUp, Edit, Trash2, Loader2, Package } from 'lucide-react'
 
 export function Products() {
   const [showForm, setShowForm] = useState(false)
