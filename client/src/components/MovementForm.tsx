@@ -66,7 +66,7 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
           compartment_id: compartment.id,
           tipo: type,
           qty: data.quantity,
-        })
+        } as any)
 
       if (movementError) throw movementError
 
@@ -85,8 +85,8 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
       if (existingStock) {
         // Update existing stock
         const newQuantity = type === 'ENTRADA' 
-          ? existingStock.quantity + data.quantity
-          : existingStock.quantity - data.quantity
+          ? (existingStock as any).quantity + data.quantity
+          : (existingStock as any).quantity - data.quantity
 
         if (newQuantity < 0) {
           throw new Error('Quantidade insuficiente em estoque')
@@ -97,15 +97,15 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
           const { error } = await supabase
             .from('stock_by_compartment')
             .delete()
-            .eq('id', existingStock.id)
+            .eq('id', (existingStock as any).id)
           
           if (error) throw error
         } else {
           // Update stock quantity
           const { error } = await supabase
             .from('stock_by_compartment')
-            .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-            .eq('id', existingStock.id)
+            .update({ quantity: newQuantity, updated_at: new Date().toISOString() } as any)
+            .eq('id', (existingStock as any).id)
           
           if (error) throw error
         }
@@ -118,7 +118,7 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
               compartment_id: compartment.id,
               product_id: data.productId,
               quantity: data.quantity,
-            })
+            } as any)
           
           if (error) throw error
         } else {

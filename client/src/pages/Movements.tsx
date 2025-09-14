@@ -55,7 +55,7 @@ export function Movements() {
       // Filter by product name on client side for simplicity
       let filteredData = data || []
       if (filters.product.trim()) {
-        filteredData = filteredData.filter(movement =>
+        filteredData = filteredData.filter((movement: any) =>
           movement.products?.produto.toLowerCase().includes(filters.product.toLowerCase()) ||
           movement.products?.codigo_produto.toLowerCase().includes(filters.product.toLowerCase())
         )
@@ -173,7 +173,7 @@ export function Movements() {
             </div>
           ) : (
             <div className="space-y-3">
-              {movements.map((movement) => (
+              {movements.map((movement: any) => (
                 <div
                   key={movement.id}
                   className="flex items-start justify-between p-4 border border-border rounded-lg hover:bg-muted/25 transition-colors"

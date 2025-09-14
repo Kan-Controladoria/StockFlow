@@ -235,7 +235,7 @@ export function WarehouseMap() {
       {showScanner && (
         <BarcodeScanner
           onClose={() => setShowScanner(false)}
-          onCodeScanned={(code) => {
+          onCodeScanned={(code: string) => {
             setFilters(prev => ({ ...prev, product: code }))
             setShowScanner(false)
           }}

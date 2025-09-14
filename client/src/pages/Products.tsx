@@ -115,7 +115,7 @@ export function Products() {
         // Import products
         const { error } = await supabase
           .from('products')
-          .upsert(data, { onConflict: 'codigo_barras' })
+          .upsert(data as any, { onConflict: 'codigo_barras' })
         
         if (error) throw error
 
@@ -225,7 +225,7 @@ export function Products() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {products.map((product) => (
+                  {products.map((product: any) => (
                     <TableRow key={product.id}>
                       <TableCell className="font-mono text-sm">
                         {product.codigo_barras}

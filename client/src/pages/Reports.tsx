@@ -37,7 +37,7 @@ export function Reports() {
         .from('stock_by_compartment')
         .select('compartment_id')
       
-      const compartmentsWithStock = new Set(stockData?.map(s => s.compartment_id)).size
+      const compartmentsWithStock = new Set(stockData?.map((s: any) => s.compartment_id)).size
 
       // Get monthly movements
       const thirtyDaysAgo = new Date()
@@ -65,7 +65,7 @@ export function Reports() {
         .select('departamento')
         .order('departamento')
       
-      const uniqueDepts = Array.from(new Set(data?.map(p => p.departamento))).filter(Boolean)
+      const uniqueDepts = Array.from(new Set(data?.map((p: any) => p.departamento))).filter(Boolean)
       return uniqueDepts
     }
   })
@@ -89,13 +89,13 @@ export function Reports() {
       let filteredData = data || []
       
       if (filters.corridor) {
-        filteredData = filteredData.filter(item => 
+        filteredData = filteredData.filter((item: any) => 
           item.compartments.corredor === parseInt(filters.corridor)
         )
       }
 
       if (filters.department) {
-        filteredData = filteredData.filter(item => 
+        filteredData = filteredData.filter((item: any) => 
           item.products.departamento === filters.department
         )
       }
@@ -108,7 +108,7 @@ export function Reports() {
     if (!stockReport) return
 
     const csvHeader = 'Compartimento,Corredor,Linha,Coluna,Produto,Código,Departamento,Categoria,Quantidade\n'
-    const csvData = stockReport.map(item => 
+    const csvData = stockReport.map((item: any) => 
       [
         item.compartments.address,
         item.compartments.corredor,
@@ -325,7 +325,7 @@ export function Reports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {stockReport.map((item) => (
+                    {stockReport.map((item: any) => (
                       <tr key={item.id} className="border-b hover:bg-muted/25">
                         <td className="p-2 font-mono text-sm">{item.compartments.address}</td>
                         <td className="p-2">
