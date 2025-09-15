@@ -302,20 +302,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/movements", async (req, res) => {
     try {
-      const { user_id, product_id, code, tipo, qty } = req.body;
+      // Support both new format (code) and old format (compartment_id)
+      // Support both 'tipo' and 'type' fields
+      const { user_id, product_id, code, compartment_id, tipo, type, qty } = req.body;
+      
+      const finalCode = code || compartment_id;
+      const finalTipo = tipo || (type === 'entrada' ? 'ENTRADA' : type === 'saida' ? 'SAIDA' : type?.toUpperCase());
+      
+      // Default user_id for external API calls (create a default user if needed)
+      let finalUserId = user_id;
+      if (!finalUserId) {
+        // Try to get first available user or create default one
+        const profiles = await storage.getAllProfiles();
+        if (profiles.length > 0) {
+          finalUserId = profiles[0].id;
+        } else {
+          // Create default user for API testing
+          const defaultUser = await storage.createProfile({
+            email: 'api@teste.com',
+            full_name: 'API Test User'
+          });
+          finalUserId = defaultUser.id;
+        }
+      }
       
       // Buscar o UUID real do compartimento pelo código
-      const compartment = await storage.getCompartmentByAddress(code);
+      const compartment = await storage.getCompartmentByAddress(finalCode);
       if (!compartment) {
         return res.status(400).json({ error: "Compartimento não encontrado" });
       }
       
       // Criar dados do movimento com UUID real
       const movementData = {
-        user_id,
+        user_id: finalUserId,
         product_id, 
         compartment_id: compartment.id, // UUID real
-        tipo,
+        tipo: finalTipo,
         qty
       };
       
@@ -360,6 +382,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(movement);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Stock/Balance endpoint for compatibility with external scripts
+  app.get("/api/movements/:productId", async (req, res) => {
+    try {
+      const { productId } = req.params;
+      
+      // Get current stock for all compartments of this product
+      const stock = await storage.getStockByProduct(productId);
+      const totalStock = stock.reduce((sum, s) => sum + s.quantity, 0);
+      
+      res.json({
+        product_id: productId,
+        saldo: totalStock,
+        compartments: stock
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
