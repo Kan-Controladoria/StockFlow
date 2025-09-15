@@ -32,6 +32,7 @@ export interface IStorage {
   // Compartment methods
   getAllCompartments(): Promise<Compartment[]>;
   getCompartment(id: string): Promise<Compartment | undefined>;
+  getCompartmentByAddress(address: string): Promise<Compartment | undefined>;
   getCompartmentWithStock(id: string): Promise<CompartmentWithStock | undefined>;
   getAllCompartmentsWithStock(): Promise<CompartmentWithStock[]>;
   createCompartment(compartment: InsertCompartment): Promise<Compartment>;
@@ -216,6 +217,10 @@ export class MemStorage implements IStorage {
 
   async getCompartment(id: string): Promise<Compartment | undefined> {
     return this.compartments.get(id);
+  }
+
+  async getCompartmentByAddress(address: string): Promise<Compartment | undefined> {
+    return Array.from(this.compartments.values()).find(c => c.address === address);
   }
 
   async getCompartmentWithStock(id: string): Promise<CompartmentWithStock | undefined> {

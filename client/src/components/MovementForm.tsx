@@ -62,7 +62,7 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
       const response = await apiRequest('POST', '/api/movements', {
         user_id: user.id,
         product_id: data.productId,
-        compartment_id: compartment.id,
+        code: compartment.address,
         tipo: type,
         qty: data.quantity,
       })

@@ -302,7 +302,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/movements", async (req, res) => {
     try {
-      const validatedData = insertMovementSchema.parse(req.body);
+      const { user_id, product_id, code, tipo, qty } = req.body;
+      
+      // Buscar o UUID real do compartimento pelo código
+      const compartment = await storage.getCompartmentByAddress(code);
+      if (!compartment) {
+        return res.status(400).json({ error: "Compartimento não encontrado" });
+      }
+      
+      // Criar dados do movimento com UUID real
+      const movementData = {
+        user_id,
+        product_id, 
+        compartment_id: compartment.id, // UUID real
+        tipo,
+        qty
+      };
+      
+      const validatedData = insertMovementSchema.parse(movementData);
       
       // Handle stock update logic
       const existingStock = await storage.getStockByCompartmentAndProduct(
