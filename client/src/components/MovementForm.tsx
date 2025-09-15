@@ -59,15 +59,12 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
       if (!user) throw new Error('Usuário não autenticado')
 
       // Create movement (backend handles stock update logic)
-      const response = await apiRequest('/api/movements', {
-        method: 'POST',
-        body: {
-          user_id: user.id,
-          product_id: data.productId,
-          compartment_id: compartment.id,
-          tipo: type,
-          qty: data.quantity,
-        }
+      const response = await apiRequest('POST', '/api/movements', {
+        user_id: user.id,
+        product_id: data.productId,
+        compartment_id: compartment.id,
+        tipo: type,
+        qty: data.quantity,
       })
       
       if (!response.ok) {
