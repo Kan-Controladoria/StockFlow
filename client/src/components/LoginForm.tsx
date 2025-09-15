@@ -8,8 +8,8 @@ import { useToast } from '@/hooks/use-toast'
 import { Warehouse, LogIn, Loader2 } from 'lucide-react'
 
 export function LoginForm() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('teste@empresa.com')
+  const [password, setPassword] = useState('senha123')
   const [isLoading, setIsLoading] = useState(false)
   const { signIn } = useAuth()
   const { toast } = useToast()
@@ -63,7 +63,7 @@ export function LoginForm() {
               <Input
                 id="email"
                 type="email"
-                placeholder="seu.email@empresa.com"
+                placeholder="teste@empresa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

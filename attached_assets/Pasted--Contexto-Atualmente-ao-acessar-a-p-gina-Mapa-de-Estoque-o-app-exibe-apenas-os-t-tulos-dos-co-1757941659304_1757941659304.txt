@@ -1,0 +1,29 @@
+### Contexto
+Atualmente, ao acessar a página “Mapa de Estoque”, o app exibe apenas os títulos dos corredores (1–5) e das linhas (A–C); a grade de 10 colunas por linha não é renderizada, independentemente dos filtros aplicados ou não aplicados. Clicar no ícone azul de corredor ou nas linhas não faz nada. Já confirmei que os filtros “Todos os corredores”, “Todas as linhas” e o campo de busca de produto em branco não resolvem o problema. O problema surgiu após a conclusão do MVP.
+
+### Objetivo
+1. **Diagnosticar e corrigir** a causa da não renderização da grade de 5 corredores × 3 linhas × 10 colunas no componente `WarehouseMap` (ou equivalente). Verificar se há:
+   - Condicionais incorretas nos filtros de corredor/linha/produto.
+   - Problemas na consulta ao Supabase (RLS, permissões, falhas de fetch).
+   - Erros de renderização ou CSS que escondem o grid.
+   - Depêndencias de `selectedProduct` ou `selectedLine` que impedem a exibição quando vazias.
+2. **Garantir** que o mapa exibe o grid completo sempre que não há filtros ativos e que o filtro funciona corretamente (mostrando apenas os compartimentos correspondentes a um corredor ou produto).
+3. **Testar** a funcionalidade de clicar em cada compartimento:
+   - O modal deve abrir listando produtos, com botões **Entrada** e **Saída**.
+   - Registrar entradas (via digitação de código de barras ou código do produto, e via scanner) e saídas, atualizando o estoque e criando registros em `movements`.
+4. **Validar** as demais funcionalidades essenciais:
+   - Tela de **login** com Supabase Auth.
+   - **Cadastro/edição** de produtos e importação de CSV.
+   - Relatórios com filtros e exportação CSV.
+   - Histórico de movimentações com filtros (datas, tipo de movimento, usuário, produto) e detalhes.
+   - Responsividade e PWA (instalação, manifest e funcionamento offline).
+5. **Executar testes** (manuais ou automatizados) de ponta a ponta para comprovar que:
+   - O grid aparece corretamente em todos os corredores e linhas.
+   - Os filtros de corredor, linha e produto não quebram a grade.
+   - As funcionalidades de entrada e saída funcionam sem erros.
+   - Cadastro, importação, relatórios e histórico continuam operando após a correção.
+6. **Documentar** no chat qualquer ajuste realizado (arquivos modificados, trechos de código relevantes) e relatar o resultado dos testes.
+
+### Restrição
+Tenho apenas 5 solicitações de agente restantes este mês. Faça o máximo possível nesta execução, evitando idas e vindas desnecessárias.
+
