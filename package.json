@@ -77,6 +77,8 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-decorators": "^7.28.0",
+    "@babel/plugin-syntax-decorators": "^7.27.1",
     "@replit/vite-plugin-cartographer": "^0.3.0",
     "@replit/vite-plugin-dev-banner": "^0.1.1",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
