@@ -25,45 +25,74 @@ export function WarehouseMap() {
     product: ''
   })
 
-  // Fetch compartments with stock information
-  const { data: compartments, isLoading } = useQuery({
-    queryKey: ['/api/compartments', filters],
+  // Generate static warehouse grid - 5 corridors × 3 rows × 10 columns = 150 compartments
+  const generateStaticCompartments = () => {
+    const compartments: CompartmentWithStock[] = []
+    
+    for (let corredor = 1; corredor <= 5; corredor++) {
+      for (const linha of ['A', 'B', 'C']) {
+        for (let coluna = 1; coluna <= 10; coluna++) {
+          const address = `${corredor}${linha}${coluna}`
+          compartments.push({
+            id: `static-${address}`,
+            address,
+            corredor,
+            linha,
+            coluna,
+            created_at: new Date().toISOString(),
+            stock: []
+          })
+        }
+      }
+    }
+    
+    return compartments
+  }
+
+  // Fetch stock data separately to populate the static grid
+  const { data: stockData } = useQuery({
+    queryKey: ['/api/stock'],
     queryFn: async () => {
-      let query = supabase
-        .from('compartments')
-        .select(`
-          *,
-          stock:stock_by_compartment(
+      try {
+        const { data, error } = await supabase
+          .from('stock_by_compartment')
+          .select(`
             *,
+            compartments(*),
             products(*)
-          )
-        `)
-
-      if (filters.corridor && filters.corridor !== 'all') {
-        query = query.eq('corredor', parseInt(filters.corridor))
+          `)
+        
+        if (error) {
+          console.warn('Stock query error:', error)
+          return []
+        }
+        
+        return data || []
+      } catch (error) {
+        console.warn('Stock query failed:', error)
+        return []
       }
-      
-      if (filters.row && filters.row !== 'all') {
-        query = query.eq('linha', filters.row)
-      }
+    }
+  })
 
-      const { data, error } = await query.order('address')
-      
-      if (error) throw error
-      
-      let filteredData = data as CompartmentWithStock[]
-
-      // Filter by product if specified
-      if (filters.product) {
-        filteredData = filteredData.filter(comp =>
-          comp.stock.some(s =>
-            s.products.produto.toLowerCase().includes(filters.product.toLowerCase()) ||
-            s.products.codigo_produto.toLowerCase().includes(filters.product.toLowerCase())
-          )
-        )
-      }
-
-      return filteredData
+  // Combine static grid with stock data
+  const compartments = generateStaticCompartments().map(staticComp => {
+    // Find stock for this compartment
+    const compStock = stockData?.filter((stock: any) => 
+      stock.compartments?.address === staticComp.address
+    ) || []
+    
+    return {
+      ...staticComp,
+      stock: compStock.map((s: any) => ({
+        id: s.id,
+        compartment_id: s.compartment_id,
+        product_id: s.product_id,
+        quantity: s.quantity,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+        products: s.products
+      }))
     }
   })
 
@@ -76,9 +105,11 @@ export function WarehouseMap() {
   }
 
   const renderCompartmentGrid = (corridor: number) => {
-    const corridorCompartments = compartments?.filter(c => c.corredor === corridor) || []
     const rows = ['A', 'B', 'C']
     const columns = Array.from({ length: 10 }, (_, i) => i + 1)
+    
+    // Filter compartments by corridor (always render all)
+    const corridorCompartments = compartments.filter(c => c.corredor === corridor)
 
     return (
       <div className="space-y-3">
@@ -97,21 +128,19 @@ export function WarehouseMap() {
                   const compartment = corridorCompartments.find(c => c.address === address)
                   const stockCount = compartment?.stock.reduce((sum, s) => sum + s.quantity, 0) || 0
                   
-                  // Only render if compartment exists (should always exist since all 150 are in DB)
-                  if (!compartment) {
-                    console.warn(`Compartment ${address} not found in query results`)
-                    return null
-                  }
-                  
+                  // Always render compartment (static grid)
                   return (
                     <Button
                       key={address}
                       variant="outline"
                       className={`
-                        aspect-square p-0 text-xs font-medium compartment-cell
-                        ${stockCount > 0 ? 'compartment-with-stock bg-green-50 border-green-200 hover:bg-green-100' : ''}
+                        aspect-square p-0 text-xs font-medium compartment-cell transition-colors
+                        ${stockCount > 0 
+                          ? 'compartment-with-stock bg-green-50 border-green-200 hover:bg-green-100 text-green-800' 
+                          : 'hover:bg-muted/50'
+                        }
                       `}
-                      onClick={() => openCompartment(compartment)}
+                      onClick={() => compartment && openCompartment(compartment)}
                       data-stock-count={stockCount > 0 ? stockCount : ''}
                       data-testid={`compartment-${address}`}
                     >
@@ -127,24 +156,29 @@ export function WarehouseMap() {
     )
   }
 
-  if (isLoading) {
-    return (
-      <div className="p-4 lg:p-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="animate-pulse space-y-4">
-              <div className="h-4 bg-muted rounded w-1/3"></div>
-              <div className="grid grid-cols-10 gap-2">
-                {Array.from({ length: 30 }).map((_, i) => (
-                  <div key={i} className="aspect-square bg-muted rounded"></div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // Apply filters to determine which compartments to show
+  const filteredCompartments = compartments.filter(comp => {
+    // Filter by corridor
+    if (filters.corridor !== 'all' && comp.corredor !== parseInt(filters.corridor)) {
+      return false
+    }
+    
+    // Filter by row
+    if (filters.row !== 'all' && comp.linha !== filters.row) {
+      return false
+    }
+    
+    // Filter by product
+    if (filters.product.trim()) {
+      const hasMatchingProduct = comp.stock.some(s =>
+        s.products?.produto.toLowerCase().includes(filters.product.toLowerCase()) ||
+        s.products?.codigo_produto.toLowerCase().includes(filters.product.toLowerCase())
+      )
+      return hasMatchingProduct
+    }
+    
+    return true
+  })
 
   return (
     <div className="p-4 lg:p-6">
@@ -227,7 +261,26 @@ export function WarehouseMap() {
                 ? [1, 2, 3, 4, 5] 
                 : [parseInt(filters.corridor)]
               
-              return corridorsToShow.map(corridor => (
+              // If product filter is active, only show corridors that have matching products
+              const corridorsWithData = filters.product.trim() 
+                ? corridorsToShow.filter(corridor => 
+                    filteredCompartments.some(comp => comp.corredor === corridor)
+                  )
+                : corridorsToShow
+              
+              if (corridorsWithData.length === 0 && filters.product.trim()) {
+                return (
+                  <div className="text-center py-12">
+                    <MapPin className="mx-auto h-12 w-12 text-muted-foreground/30" />
+                    <h3 className="mt-4 text-lg font-medium text-foreground">Nenhum produto encontrado</h3>
+                    <p className="mt-2 text-muted-foreground">
+                      Não há produtos com "{filters.product}" nos compartimentos
+                    </p>
+                  </div>
+                )
+              }
+              
+              return corridorsWithData.map(corridor => (
                 <div key={corridor}>
                   {renderCompartmentGrid(corridor)}
                 </div>
