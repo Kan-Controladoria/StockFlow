@@ -25,21 +25,47 @@ export function WarehouseMap() {
     product: ''
   })
 
-  // Generate static warehouse grid - 5 corridors × 3 rows × 10 columns = 150 compartments
-  const generateStaticCompartments = () => {
+  // Fetch real compartments from database
+  const { data: realCompartments } = useQuery({
+    queryKey: ['/api/real-compartments'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('compartments')
+          .select('id, address, corredor, linha, coluna, created_at')
+        
+        if (error) {
+          console.warn('Compartments query error:', error)
+          return []
+        }
+        
+        return data || []
+      } catch (error) {
+        console.warn('Compartments query failed:', error)
+        return []
+      }
+    }
+  })
+
+  // Generate static warehouse grid using real IDs when available
+  const generateCompartmentsGrid = () => {
     const compartments: CompartmentWithStock[] = []
     
     for (let corredor = 1; corredor <= 5; corredor++) {
       for (const linha of ['A', 'B', 'C']) {
         for (let coluna = 1; coluna <= 10; coluna++) {
           const address = `${corredor}${linha}${coluna}`
+          
+          // Find real compartment or create placeholder
+          const realComp = realCompartments?.find((c: any) => c.address === address)
+          
           compartments.push({
-            id: `static-${address}`,
+            id: realComp?.id || `placeholder-${address}`,
             address,
             corredor,
             linha,
             coluna,
-            created_at: new Date().toISOString(),
+            created_at: realComp?.created_at || new Date().toISOString(),
             stock: []
           })
         }
@@ -75,15 +101,15 @@ export function WarehouseMap() {
     }
   })
 
-  // Combine static grid with stock data
-  const compartments = generateStaticCompartments().map(staticComp => {
+  // Combine grid with stock data
+  const compartments = generateCompartmentsGrid().map(gridComp => {
     // Find stock for this compartment
     const compStock = stockData?.filter((stock: any) => 
-      stock.compartments?.address === staticComp.address
+      stock.compartments?.address === gridComp.address
     ) || []
     
     return {
-      ...staticComp,
+      ...gridComp,
       stock: compStock.map((s: any) => ({
         id: s.id,
         compartment_id: s.compartment_id,
