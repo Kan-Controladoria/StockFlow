@@ -2,6 +2,9 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import type { MovementWithDetails, Profile, Compartment } from '../../../shared/schema'
+import type { Product, CompartmentWithStock } from '../types/database'
+import { ProductForm } from '../components/ProductForm'
+import { CompartmentModal } from '../components/CompartmentModal'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,6 +53,12 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
     subcategory: 'all'
   })
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  
+  // Modal state management
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [selectedCompartmentId, setSelectedCompartmentId] = useState<string | null>(null)
+  const [showProductModal, setShowProductModal] = useState(false)
+  const [showCompartmentModal, setShowCompartmentModal] = useState(false)
 
   // Fetch dropdown options
   const { data: users } = useQuery<Profile[]>({
@@ -104,6 +113,44 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
       if (error) throw error
       return Array.from(new Set((data as {subcategoria: string}[]).map(p => p.subcategoria))).filter(Boolean)
     }
+  })
+
+  // Query for selected product data
+  const { data: selectedProduct } = useQuery({
+    queryKey: ['/api/products', selectedProductId],
+    queryFn: async (): Promise<Product | null> => {
+      if (!selectedProductId) return null
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', selectedProductId)
+        .single()
+      if (error) throw error
+      return data
+    },
+    enabled: !!selectedProductId
+  })
+
+  // Query for selected compartment data with stock
+  const { data: selectedCompartment } = useQuery({
+    queryKey: ['/api/compartments', selectedCompartmentId],
+    queryFn: async (): Promise<CompartmentWithStock | null> => {
+      if (!selectedCompartmentId) return null
+      const { data, error } = await supabase
+        .from('compartments')
+        .select(`
+          *,
+          stock:stock_by_compartment(
+            *,
+            products(*)
+          )
+        `)
+        .eq('id', selectedCompartmentId)
+        .single()
+      if (error) throw error
+      return data
+    },
+    enabled: !!selectedCompartmentId
   })
 
   const { data: movements, isLoading } = useQuery<MovementWithDetails[]>({
@@ -257,6 +304,32 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  // Click handlers for opening modals
+  const handleProductClick = (productId: string, productName: string) => {
+    setSelectedProductId(productId)
+    setShowProductModal(true)
+    // Also call the optional external handler if provided
+    onProductClick?.(productId, productName)
+  }
+
+  const handleCompartmentClick = (compartmentId: string, compartmentAddress: string) => {
+    setSelectedCompartmentId(compartmentId)
+    setShowCompartmentModal(true)
+    // Also call the optional external handler if provided
+    onCompartmentClick?.(compartmentId, compartmentAddress)
+  }
+
+  // Modal close handlers
+  const handleCloseProductModal = () => {
+    setShowProductModal(false)
+    setSelectedProductId(null)
+  }
+
+  const handleCloseCompartmentModal = () => {
+    setShowCompartmentModal(false)
+    setSelectedCompartmentId(null)
   }
 
   return (
@@ -595,7 +668,7 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         <button
                           className="font-medium text-foreground hover:text-primary hover:underline cursor-pointer transition-colors"
-                          onClick={() => onProductClick?.(movement.product_id, movement.products?.produto || '')}
+                          onClick={() => handleProductClick(movement.product_id, movement.products?.produto || '')}
                           data-testid={`button-product-${movement.id}`}
                         >
                           {movement.products?.produto || 'Produto não encontrado'}
@@ -636,7 +709,7 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
                         <span className="text-muted-foreground">Compartimento:</span>{' '}
                         <button
                           className="font-mono font-medium text-foreground hover:text-primary hover:underline cursor-pointer transition-colors"
-                          onClick={() => onCompartmentClick?.(movement.compartment_id, movement.compartments?.address || '')}
+                          onClick={() => handleCompartmentClick(movement.compartment_id, movement.compartments?.address || '')}
                           data-testid={`button-compartment-${movement.id}`}
                         >
                           {movement.compartments?.address || 'N/A'}
@@ -660,6 +733,22 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
           )}
         </CardContent>
       </Card>
+
+      {/* Product Modal */}
+      {showProductModal && selectedProduct && (
+        <ProductForm
+          product={selectedProduct}
+          onClose={handleCloseProductModal}
+        />
+      )}
+
+      {/* Compartment Modal */}
+      {showCompartmentModal && selectedCompartment && (
+        <CompartmentModal
+          compartment={selectedCompartment}
+          onClose={handleCloseCompartmentModal}
+        />
+      )}
     </div>
   )
 }
