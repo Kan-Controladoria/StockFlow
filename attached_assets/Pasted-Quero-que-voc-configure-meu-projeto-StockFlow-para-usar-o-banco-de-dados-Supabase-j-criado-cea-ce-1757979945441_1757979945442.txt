@@ -1,0 +1,60 @@
+Quero que você configure meu projeto StockFlow para usar o banco de dados Supabase já criado (cea_center_kan).  
+Aqui estão os dados que você precisa considerar:
+
+- O Supabase já está ativo e acessível.  
+- Tenho as chaves disponíveis em API Keys: usar a **anon public** para conexão.  
+- O projeto precisa gravar e ler produtos e movimentações no Supabase em vez de MemStorage.  
+
+### Tarefas que você deve executar:
+1. Criar no Supabase as tabelas necessárias:
+   - **produtos**
+     - id (uuid, PK, default gen_random_uuid())
+     - nome (text)
+     - codigo (text, único)
+     - departamento (text)
+     - categoria (text)
+     - subcategoria (text)
+     - created_at (timestamp, default now())
+   - **movimentos**
+     - id (uuid, PK, default gen_random_uuid())
+     - produto_id (uuid, FK para produtos.id)
+     - codigo_compartimento (text)  -- exemplo: "1A1"
+     - tipo (text)  -- "ENTRADA" ou "SAIDA"
+     - quantidade (integer)
+     - created_at (timestamp, default now())
+   - **usuarios**
+     - id (uuid, PK, default gen_random_uuid())
+     - email (text único)
+     - nome (text)
+
+2. No backend do StockFlow:
+   - Substituir toda a lógica atual de MemStorage para usar o cliente oficial do Supabase:
+     ```js
+     import { createClient } from '@supabase/supabase-js';
+
+     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+     ```
+   - Ajustar rotas:
+     - POST /api/products → insere em `produtos`
+     - GET /api/products → lista de `produtos`
+     - POST /api/movements → insere em `movimentos`
+     - GET /api/movements/:productId → retorna saldo do produto (somar entradas - saídas)
+
+3. Configurar variáveis de ambiente no Replit:
+   - `SUPABASE_URL` → URL do projeto
+   - `SUPABASE_KEY` → anon public
+
+4. Rodar um **teste automatizado**:
+   - Criar 5 produtos (um em cada corredor, 100 unidades cada).
+   - Retirar 30 unidades de cada.
+   - Consultar saldos finais.
+   - Gerar relatório mostrando esperado (70) x real.
+
+5. Se encontrar erro:
+   - Corrigir automaticamente.
+   - Rodar novamente até que o relatório final mostre todos corretos.
+
+### Objetivo final:
+- Produtos e movimentos devem aparecer no front do StockFlow.  
+- Recarregar a aplicação não deve mais apagar os dados.  
+- Relatório do teste deve mostrar todos com saldo 70.  

@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { 
   type Profile, type InsertProfile,
   type Product, type InsertProduct,
@@ -7,6 +8,14 @@ import {
   type CompartmentWithStock, type MovementWithDetails
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Storage interface with all CRUD methods needed
 export interface IStorage {
