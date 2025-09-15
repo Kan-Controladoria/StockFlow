@@ -32,7 +32,7 @@ export function WarehouseMap() {
       try {
         const { data, error } = await supabase
           .from('compartments')
-          .select('id, address, corredor, linha, coluna, created_at')
+          .select('*')
         
         if (error) {
           console.warn('Compartments query error:', error)
@@ -60,12 +60,12 @@ export function WarehouseMap() {
           const realComp = realCompartments?.find((c: any) => c.address === address)
           
           compartments.push({
-            id: realComp?.id || `placeholder-${address}`,
+            id: (realComp as any)?.id || `placeholder-${address}`,
             address,
             corredor,
             linha,
             coluna,
-            created_at: realComp?.created_at || new Date().toISOString(),
+            created_at: (realComp as any)?.created_at || new Date().toISOString(),
             stock: []
           })
         }
@@ -166,7 +166,13 @@ export function WarehouseMap() {
                           : 'hover:bg-muted/50'
                         }
                       `}
-                      onClick={() => compartment && openCompartment(compartment)}
+                      onClick={() => {
+                        // Only allow clicks on real compartments (not placeholders)
+                        if (compartment && !compartment.id.startsWith('placeholder-')) {
+                          openCompartment(compartment)
+                        }
+                      }}
+                      disabled={!compartment || compartment.id.startsWith('placeholder-')}
                       data-stock-count={stockCount > 0 ? stockCount : ''}
                       data-testid={`compartment-${address}`}
                     >
