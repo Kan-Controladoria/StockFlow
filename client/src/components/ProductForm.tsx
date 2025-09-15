@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { apiRequest } from '@/lib/queryClient'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import type { Product } from '../types/database'
+import type { Product } from '@shared/schema'
 import { Loader2 } from 'lucide-react'
 
 interface ProductFormProps {
@@ -44,25 +44,30 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
     mutationFn: async (data: typeof formData) => {
       if (product && product.id) {
         // Update existing product
-        const { error } = await (supabase as any)
-          .from('products')
-          .update({
-            ...data,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', product.id)
+        const response = await apiRequest(`/api/products/${product.id}`, {
+          method: 'PUT',
+          body: data
+        })
         
-        if (error) {
-          console.error('Update error:', error)
-          throw error
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to update product')
         }
+        
+        return await response.json()
       } else {
         // Create new product
-        const { error } = await (supabase as any)
-          .from('products')
-          .insert(data)
+        const response = await apiRequest('/api/products', {
+          method: 'POST',
+          body: data
+        })
         
-        if (error) throw error
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create product')
+        }
+        
+        return await response.json()
       }
     },
     onSuccess: () => {

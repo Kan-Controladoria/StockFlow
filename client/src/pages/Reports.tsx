@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -27,32 +26,9 @@ export function Reports() {
   const { data: stats } = useQuery({
     queryKey: ['/api/reports/stats'],
     queryFn: async () => {
-      // Get total products
-      const { count: totalProducts } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-
-      // Get compartments with stock
-      const { data: stockData } = await supabase
-        .from('stock_by_compartment')
-        .select('compartment_id')
-      
-      const compartmentsWithStock = new Set(stockData?.map((s: any) => s.compartment_id)).size
-
-      // Get monthly movements
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      
-      const { count: monthlyMovements } = await supabase
-        .from('movements')
-        .select('*', { count: 'exact', head: true })
-        .gte('timestamp', thirtyDaysAgo.toISOString())
-
-      return {
-        totalProducts: totalProducts || 0,
-        compartmentsWithStock,
-        monthlyMovements: monthlyMovements || 0
-      }
+      const response = await fetch('/api/reports/stats')
+      if (!response.ok) throw new Error('Failed to fetch stats')
+      return await response.json()
     }
   })
 
@@ -60,13 +36,9 @@ export function Reports() {
   const { data: departments } = useQuery({
     queryKey: ['/api/products/departments'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('products')
-        .select('departamento')
-        .order('departamento')
-      
-      const uniqueDepts = Array.from(new Set(data?.map((p: any) => p.departamento))).filter(Boolean)
-      return uniqueDepts
+      const response = await fetch('/api/products/departments')
+      if (!response.ok) throw new Error('Failed to fetch departments')
+      return await response.json()
     }
   })
 
@@ -74,33 +46,18 @@ export function Reports() {
   const { data: stockReport, isLoading: isLoadingReport } = useQuery({
     queryKey: ['/api/reports/stock', filters],
     queryFn: async () => {
-      let query = supabase
-        .from('stock_by_compartment')
-        .select(`
-          *,
-          compartments(*),
-          products(*)
-        `)
-
-      const { data, error } = await query
-      if (error) throw error
-
-      // Filter by corridor and department on client side for simplicity
-      let filteredData = data || []
-      
+      const params = new URLSearchParams()
       if (filters.corridor && filters.corridor !== 'all') {
-        filteredData = filteredData.filter((item: any) => 
-          item.compartments.corredor === parseInt(filters.corridor)
-        )
+        params.append('corridor', filters.corridor)
       }
-
       if (filters.department && filters.department !== 'all') {
-        filteredData = filteredData.filter((item: any) => 
-          item.products.departamento === filters.department
-        )
+        params.append('department', filters.department)
       }
 
-      return filteredData
+      const url = `/api/reports/stock${params.toString() ? '?' + params.toString() : ''}`
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Failed to fetch stock report')
+      return await response.json()
     }
   })
 

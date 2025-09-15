@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { apiRequest } from '@/lib/queryClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { ProductForm } from '../components/ProductForm'
-import type { Product } from '../types/database'
+import type { Product } from '@shared/schema'
 import { Plus, FileUp, Edit, Trash2, Loader2, Package } from 'lucide-react'
 
 export function Products() {
@@ -22,26 +22,26 @@ export function Products() {
   const { data: products, isLoading } = useQuery({
     queryKey: ['/api/products', searchTerm],
     queryFn: async () => {
-      let query = supabase.from('products').select('*').order('produto')
+      const url = searchTerm.trim() 
+        ? `/api/products?search=${encodeURIComponent(searchTerm)}`
+        : '/api/products'
       
-      if (searchTerm.trim()) {
-        query = query.or(`produto.ilike.%${searchTerm}%,codigo_produto.ilike.%${searchTerm}%,codigo_barras.ilike.%${searchTerm}%`)
-      }
-      
-      const { data, error } = await query
-      if (error) throw error
-      return data
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Failed to fetch products')
+      return await response.json()
     }
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', id)
+      const response = await apiRequest(`/api/products/${id}`, {
+        method: 'DELETE'
+      })
       
-      if (error) throw error
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete product')
+      }
     },
     onSuccess: () => {
       toast({
@@ -112,16 +112,30 @@ export function Products() {
           throw new Error('Nenhum produto válido encontrado no arquivo.')
         }
 
-        // Import products
-        const { error } = await supabase
-          .from('products')
-          .upsert(data as any, { onConflict: 'codigo_barras' })
+        // Import products - create each product individually
+        let successCount = 0
+        for (const product of data) {
+          try {
+            const response = await apiRequest('/api/products', {
+              method: 'POST',
+              body: product
+            })
+            if (response.ok) {
+              successCount++
+            }
+          } catch (error) {
+            // Continue with next product if one fails
+            console.warn('Failed to import product:', product, error)
+          }
+        }
         
-        if (error) throw error
+        if (successCount === 0) {
+          throw new Error('Nenhum produto foi importado com sucesso.')
+        }
 
         toast({
           title: "Importação concluída",
-          description: `${data.length} produtos importados com sucesso.`,
+          description: `${successCount} de ${data.length} produtos importados com sucesso.`,
         })
 
         queryClient.invalidateQueries({ queryKey: ['/api/products'] })

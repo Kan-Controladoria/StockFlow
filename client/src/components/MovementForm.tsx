@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { queryClient, apiRequest } from '@/lib/queryClient'
 import { useAuth } from '../hooks/useAuth'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { BarcodeScanner } from './BarcodeScanner'
-import type { CompartmentWithStock, Product } from '../types/database'
+import type { CompartmentWithStock, Product } from '@shared/schema'
 import { QrCode, Package, Loader2 } from 'lucide-react'
 
 interface MovementFormProps {
@@ -33,18 +33,19 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
     queryFn: async () => {
       if (!productCode.trim()) return null
       
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .or(`codigo_barras.eq.${productCode},codigo_produto.eq.${productCode}`)
-        .single()
-      
-      if (error) {
-        if (error.code === 'PGRST116') return null // No rows found
-        throw error
+      try {
+        const response = await fetch(`/api/products/search/${encodeURIComponent(productCode)}`)
+        if (response.status === 404) {
+          return null // Product not found
+        }
+        if (!response.ok) {
+          throw new Error('Failed to search product')
+        }
+        return await response.json()
+      } catch (error) {
+        console.error('Error searching product:', error)
+        return null
       }
-      
-      return data
     },
     enabled: !!productCode.trim(),
   })
@@ -57,74 +58,24 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
     mutationFn: async (data: { productId: string; quantity: number }) => {
       if (!user) throw new Error('Usuário não autenticado')
 
-      // First, record the movement
-      const { error: movementError } = await supabase
-        .from('movements')
-        .insert({
+      // Create movement (backend handles stock update logic)
+      const response = await apiRequest('/api/movements', {
+        method: 'POST',
+        body: {
           user_id: user.id,
           product_id: data.productId,
           compartment_id: compartment.id,
           tipo: type,
           qty: data.quantity,
-        } as any)
-
-      if (movementError) throw movementError
-
-      // Then, update stock
-      const { data: existingStock, error: stockQueryError } = await supabase
-        .from('stock_by_compartment')
-        .select('*')
-        .eq('compartment_id', compartment.id)
-        .eq('product_id', data.productId)
-        .single()
-
-      if (stockQueryError && stockQueryError.code !== 'PGRST116') {
-        throw stockQueryError
+        }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erro ao registrar movimento')
       }
-
-      if (existingStock) {
-        // Update existing stock
-        const newQuantity = type === 'ENTRADA' 
-          ? (existingStock as any).quantity + data.quantity
-          : (existingStock as any).quantity - data.quantity
-
-        if (newQuantity < 0) {
-          throw new Error('Quantidade insuficiente em estoque')
-        }
-
-        if (newQuantity === 0) {
-          // Remove stock entry if quantity is 0
-          const { error } = await supabase
-            .from('stock_by_compartment')
-            .delete()
-            .eq('id', (existingStock as any).id)
-          
-          if (error) throw error
-        } else {
-          // Update stock quantity
-          const { error } = await (supabase as any)
-            .from('stock_by_compartment')
-            .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-            .eq('id', (existingStock as any).id)
-          
-          if (error) throw error
-        }
-      } else {
-        // Create new stock entry (only for ENTRADA)
-        if (type === 'ENTRADA') {
-          const { error } = await supabase
-            .from('stock_by_compartment')
-            .insert({
-              compartment_id: compartment.id,
-              product_id: data.productId,
-              quantity: data.quantity,
-            } as any)
-          
-          if (error) throw error
-        } else {
-          throw new Error('Produto não encontrado no compartimento')
-        }
-      }
+      
+      return await response.json()
     },
     onSuccess: () => {
       toast({
@@ -134,6 +85,7 @@ export function MovementForm({ type, compartment, onClose, onComplete }: Movemen
       
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/compartments'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/stock'] })
       queryClient.invalidateQueries({ queryKey: ['/api/movements'] })
       
       onComplete()

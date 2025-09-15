@@ -1,8 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
-import type { MovementWithDetails, Profile, Compartment } from '../../../shared/schema'
-import type { Product, CompartmentWithStock } from '../types/database'
+import type { MovementWithDetails, Profile, Compartment, Product, CompartmentWithStock } from '@shared/schema'
 import { ProductForm } from '../components/ProductForm'
 import { CompartmentModal } from '../components/CompartmentModal'
 import { Input } from '@/components/ui/input'
@@ -62,56 +60,41 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
 
   // Fetch dropdown options
   const { data: users } = useQuery<Profile[]>({
-    queryKey: ['/api/users'],
+    queryKey: ['/api/profiles'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .order('email')
-      if (error) throw error
-      return data
+      const response = await fetch('/api/profiles')
+      if (!response.ok) throw new Error('Failed to fetch profiles')
+      return await response.json()
     }
   })
 
   const { data: compartments } = useQuery<Compartment[]>({
     queryKey: ['/api/compartments'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('compartments')
-        .select('id, address')
-        .order('address')
-      if (error) throw error
-      return data
+      const response = await fetch('/api/compartments')
+      if (!response.ok) throw new Error('Failed to fetch compartments')
+      return await response.json()
     }
   })
 
   const { data: categories } = useQuery<string[]>({
-    queryKey: ['/api/categories'],
+    queryKey: ['/api/products/categories'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('categoria')
-        .order('categoria')
-      if (error) throw error
-      return Array.from(new Set((data as {categoria: string}[]).map(p => p.categoria))).filter(Boolean)
+      const response = await fetch('/api/products/categories')
+      if (!response.ok) throw new Error('Failed to fetch categories')
+      return await response.json()
     }
   })
 
   const { data: subcategories } = useQuery<string[]>({
-    queryKey: ['/api/subcategories', filters.category],
+    queryKey: ['/api/products/subcategories', filters.category],
     queryFn: async () => {
-      let query = supabase
-        .from('products')
-        .select('subcategoria')
-        .order('subcategoria')
-      
-      if (filters.category && filters.category !== 'all') {
-        query = query.eq('categoria', filters.category)
-      }
-      
-      const { data, error } = await query
-      if (error) throw error
-      return Array.from(new Set((data as {subcategoria: string}[]).map(p => p.subcategoria))).filter(Boolean)
+      const url = filters.category && filters.category !== 'all' 
+        ? `/api/products/subcategories?category=${encodeURIComponent(filters.category)}`
+        : '/api/products/subcategories'
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Failed to fetch subcategories')
+      return await response.json()
     }
   })
 
@@ -120,13 +103,12 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
     queryKey: ['/api/products', selectedProductId],
     queryFn: async (): Promise<Product | null> => {
       if (!selectedProductId) return null
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', selectedProductId)
-        .single()
-      if (error) throw error
-      return data
+      const response = await fetch(`/api/products/${selectedProductId}`)
+      if (!response.ok) {
+        if (response.status === 404) return null
+        throw new Error('Failed to fetch product')
+      }
+      return await response.json()
     },
     enabled: !!selectedProductId
   })
@@ -136,19 +118,12 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
     queryKey: ['/api/compartments', selectedCompartmentId],
     queryFn: async (): Promise<CompartmentWithStock | null> => {
       if (!selectedCompartmentId) return null
-      const { data, error } = await supabase
-        .from('compartments')
-        .select(`
-          *,
-          stock:stock_by_compartment(
-            *,
-            products(*)
-          )
-        `)
-        .eq('id', selectedCompartmentId)
-        .single()
-      if (error) throw error
-      return data
+      const response = await fetch(`/api/compartments/${selectedCompartmentId}`)
+      if (!response.ok) {
+        if (response.status === 404) return null
+        throw new Error('Failed to fetch compartment')
+      }
+      return await response.json()
     },
     enabled: !!selectedCompartmentId
   })
@@ -156,37 +131,32 @@ export function Movements({ onProductClick, onCompartmentClick }: MovementsPageP
   const { data: movements, isLoading } = useQuery<MovementWithDetails[]>({
     queryKey: ['/api/movements', filters],
     queryFn: async () => {
-      let query = supabase
-        .from('movements')
-        .select(`
-          *,
-          products(*),
-          compartments(*),
-          profiles(id, email, full_name)
-        `)
-        .order('timestamp', { ascending: false })
+      // Build query parameters for backend
+      const params = new URLSearchParams()
 
-      // Apply date filters
       if (filters.startDate) {
-        query = query.gte('timestamp', filters.startDate)
+        params.append('startDate', filters.startDate)
       }
       if (filters.endDate) {
         const endDate = new Date(filters.endDate)
         endDate.setHours(23, 59, 59, 999)
-        query = query.lte('timestamp', endDate.toISOString())
+        params.append('endDate', endDate.toISOString())
       }
       if (filters.type && filters.type !== 'all') {
-        query = query.eq('tipo', filters.type)
+        params.append('type', filters.type)
       }
       if (filters.user && filters.user !== 'all') {
-        query = query.eq('user_id', filters.user)
+        params.append('userId', filters.user)
       }
       if (filters.compartment && filters.compartment !== 'all') {
-        query = query.eq('compartment_id', filters.compartment)
+        params.append('compartmentId', filters.compartment)
       }
 
-      const { data, error } = await query.limit(200) // Increased limit
-      if (error) throw error
+      const url = `/api/movements${params.toString() ? '?' + params.toString() : ''}`
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Failed to fetch movements')
+
+      let data = await response.json()
 
       // Apply client-side filters
       let filteredData = data || []

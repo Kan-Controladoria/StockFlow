@@ -1,6 +1,5 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -25,18 +24,27 @@ export function WarehouseMap() {
     product: ''
   })
 
-  // Generate static warehouse grid - always render all 150 compartments  
+  // Fetch ALL real compartments from database using backend API
+  const { data: dbCompartments, isLoading: compartmentsLoading } = useQuery({
+    queryKey: ['/api/db-compartments']
+  })
+
+  // Fetch stock data separately to populate the static grid
+  const { data: stockData } = useQuery({
+    queryKey: ['/api/stock']
+  })
+
+  // Generate static 150-compartment grid
   const generateCompartmentsGrid = () => {
-    const compartments: CompartmentWithStock[] = []
+    const cells: CompartmentWithStock[] = []
     
     for (let corredor = 1; corredor <= 5; corredor++) {
       for (const linha of ['A', 'B', 'C']) {
         for (let coluna = 1; coluna <= 10; coluna++) {
           const address = `${corredor}${linha}${coluna}`
           
-          // Create compartment with unique ID (will be replaced with real data when stock loads)
-          compartments.push({
-            id: `temp-${address}`, // Temporary ID that will be replaced
+          cells.push({
+            id: `temp-${address}`, // Temporary ID
             address,
             corredor,
             linha,
@@ -48,59 +56,54 @@ export function WarehouseMap() {
       }
     }
     
-    return compartments
+    return cells
   }
 
-  // Fetch stock data separately to populate the static grid
-  const { data: stockData } = useQuery({
-    queryKey: ['/api/stock'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('stock_by_compartment')
-          .select(`
-            *,
-            compartments(*),
-            products(*)
-          `)
-        
-        if (error) {
-          console.warn('Stock query error:', error)
-          return []
+  // Combine static grid with real DB data
+  const compartments = React.useMemo(() => {
+    if (compartmentsLoading) return []
+    
+    const staticGrid = generateCompartmentsGrid()
+    
+    // Create maps for efficient lookup
+    const dbByAddress = new Map()
+    dbCompartments?.forEach((comp: any) => {
+      dbByAddress.set(comp.address, comp)
+    })
+    
+    const stockByAddress = new Map()
+    stockData?.forEach((stock: any) => {
+      const address = stock.compartments?.address
+      if (address) {
+        if (!stockByAddress.has(address)) {
+          stockByAddress.set(address, [])
         }
-        
-        return data || []
-      } catch (error) {
-        console.warn('Stock query failed:', error)
-        return []
+        stockByAddress.get(address).push(stock)
       }
-    }
-  })
-
-  // Combine grid with stock data and extract real compartment IDs
-  const compartments = generateCompartmentsGrid().map(gridComp => {
-    // Find stock for this compartment
-    const compStock = stockData?.filter((stock: any) => 
-      stock.compartments?.address === gridComp.address
-    ) || []
+    })
     
-    // Get real compartment ID from stock data (if exists)
-    const realCompartmentId = compStock[0]?.compartments?.id
-    
-    return {
-      ...gridComp,
-      id: realCompartmentId || gridComp.id, // Use real ID if available
-      stock: compStock.map((s: any) => ({
-        id: s.id,
-        compartment_id: s.compartment_id,
-        product_id: s.product_id,
-        quantity: s.quantity,
-        created_at: s.created_at,
-        updated_at: s.updated_at,
-        products: s.products
-      }))
-    }
-  })
+    // Compose final grid
+    return staticGrid.map(cell => {
+      const realComp = dbByAddress.get(cell.address)
+      const hasCompartment = !!realComp
+      const stockItems = stockByAddress.get(cell.address) || []
+      
+      return {
+        ...cell,
+        id: hasCompartment ? realComp.id : cell.id, // Use real ID if exists
+        hasCompartment, // Flag for UI logic
+        stock: stockItems.map((s: any) => ({
+          id: s.id,
+          compartment_id: s.compartment_id,
+          product_id: s.product_id,
+          quantity: s.quantity,
+          created_at: s.created_at,
+          updated_at: s.updated_at,
+          products: s.products
+        }))
+      }
+    })
+  }, [dbCompartments, stockData, compartmentsLoading])
 
   const clearFilters = () => {
     setFilters({ corridor: 'all', row: 'all', product: '' })
