@@ -25,29 +25,7 @@ export function WarehouseMap() {
     product: ''
   })
 
-  // Fetch real compartments from database
-  const { data: realCompartments } = useQuery({
-    queryKey: ['/api/real-compartments'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('compartments')
-          .select('*')
-        
-        if (error) {
-          console.warn('Compartments query error:', error)
-          return []
-        }
-        
-        return data || []
-      } catch (error) {
-        console.warn('Compartments query failed:', error)
-        return []
-      }
-    }
-  })
-
-  // Generate static warehouse grid using real IDs when available
+  // Generate static warehouse grid - always render all 150 compartments  
   const generateCompartmentsGrid = () => {
     const compartments: CompartmentWithStock[] = []
     
@@ -56,16 +34,14 @@ export function WarehouseMap() {
         for (let coluna = 1; coluna <= 10; coluna++) {
           const address = `${corredor}${linha}${coluna}`
           
-          // Find real compartment or create placeholder
-          const realComp = realCompartments?.find((c: any) => c.address === address)
-          
+          // Create compartment with unique ID (will be replaced with real data when stock loads)
           compartments.push({
-            id: (realComp as any)?.id || `placeholder-${address}`,
+            id: `temp-${address}`, // Temporary ID that will be replaced
             address,
             corredor,
             linha,
             coluna,
-            created_at: (realComp as any)?.created_at || new Date().toISOString(),
+            created_at: new Date().toISOString(),
             stock: []
           })
         }
@@ -101,15 +77,19 @@ export function WarehouseMap() {
     }
   })
 
-  // Combine grid with stock data
+  // Combine grid with stock data and extract real compartment IDs
   const compartments = generateCompartmentsGrid().map(gridComp => {
     // Find stock for this compartment
     const compStock = stockData?.filter((stock: any) => 
       stock.compartments?.address === gridComp.address
     ) || []
     
+    // Get real compartment ID from stock data (if exists)
+    const realCompartmentId = compStock[0]?.compartments?.id
+    
     return {
       ...gridComp,
+      id: realCompartmentId || gridComp.id, // Use real ID if available
       stock: compStock.map((s: any) => ({
         id: s.id,
         compartment_id: s.compartment_id,
@@ -167,12 +147,10 @@ export function WarehouseMap() {
                         }
                       `}
                       onClick={() => {
-                        // Only allow clicks on real compartments (not placeholders)
-                        if (compartment && !compartment.id.startsWith('placeholder-')) {
+                        if (compartment) {
                           openCompartment(compartment)
                         }
                       }}
-                      disabled={!compartment || compartment.id.startsWith('placeholder-')}
                       data-stock-count={stockCount > 0 ? stockCount : ''}
                       data-testid={`compartment-${address}`}
                     >
