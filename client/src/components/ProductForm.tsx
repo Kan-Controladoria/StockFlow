@@ -44,10 +44,7 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
     mutationFn: async (data: typeof formData) => {
       if (product && product.id) {
         // Update existing product
-        const response = await apiRequest(`/api/products/${product.id}`, {
-          method: 'PUT',
-          body: data
-        })
+        const response = await apiRequest('PUT', `/api/products/${product.id}`, data)
         
         if (!response.ok) {
           const error = await response.json()
@@ -57,10 +54,7 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
         return await response.json()
       } else {
         // Create new product
-        const response = await apiRequest('/api/products', {
-          method: 'POST',
-          body: data
-        })
+        const response = await apiRequest('POST', '/api/products', data)
         
         if (!response.ok) {
           const error = await response.json()
