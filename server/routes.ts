@@ -76,7 +76,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/products/categories", async (req, res) => {
     try {
-      const categories = await storage.getCategories();
+      const products = await supabaseStorage.getAllProducts();
+      const categories = Array.from(new Set(products.map(p => p.categoria))).sort();
       res.json(categories);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -86,7 +87,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products/subcategories", async (req, res) => {
     try {
       const { category } = req.query;
-      const subcategories = await storage.getSubcategories(category as string);
+      const products = await supabaseStorage.getAllProducts();
+      const subcategories = Array.from(new Set(products.filter(p => !category || p.categoria === category).map(p => p.subcategoria))).sort();
       res.json(subcategories);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -95,7 +97,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/products/departments", async (req, res) => {
     try {
-      const departments = await storage.getDepartments();
+      const products = await supabaseStorage.getAllProducts();
+      const departments = Array.from(new Set(products.map(p => p.departamento))).sort();
       res.json(departments);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -104,7 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/products/:id", async (req, res) => {
     try {
-      const product = await storage.getProduct(req.params.id);
+      const product = await supabaseStorage.getProduct(req.params.id);
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
@@ -134,8 +137,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/products/:id", async (req, res) => {
     try {
-      const validatedData = insertProductSchema.partial().parse(req.body);
-      const product = await storage.updateProduct(req.params.id, validatedData);
+      // Atualização via Supabase - implementar se necessário
+      res.status(501).json({ error: 'Update not implemented with Supabase yet' });
       res.json(product);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -144,7 +147,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/products/:id", async (req, res) => {
     try {
-      await storage.deleteProduct(req.params.id);
+      // Exclusão via Supabase - implementar se necessário
+      res.status(501).json({ error: 'Delete not implemented with Supabase yet' });
       res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ error: error.message });

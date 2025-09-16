@@ -1,0 +1,57 @@
+Checar logs e schema atual no Supabase.
+
+Corrigir automaticamente:
+
+Uso do schema public.
+
+Sempre usar UUIDs corretos (product_id, compartment_id, user_id).
+
+Criar função de mapeamento 1A1 → UUID.
+
+Ajustar movements para aceitar os campos certos.
+
+Garantir que profiles (ou users) seja usado como referência para user_id.
+
+Rodar o teste completo novamente (5 produtos → entrada de 100, saída de 30).
+
+Gerar relatório final consolidado com saldos.
+
+Se encontrar erro, corrigir e rodar de novo até que tudo bata com o esperado (70 em cada produto).
+
+🚀 Prompt para colar no Replit (Agent3 ou Console)
+Você é responsável por **corrigir e validar toda a integração com o Supabase** do projeto StockFlow.  
+Execute as seguintes etapas, na ordem:
+
+1. **Verificar schema atual** das tabelas `products`, `movements`, `compartments`, `profiles`:
+   - Confirme tipos de IDs (`UUID` ou `bigint`).
+   - Confirme se as tabelas estão no schema `public`.
+   - Liste colunas relevantes (`id`, `code`, `address`, `product_id`, `compartment_id`, `user_id`, `qty`, `type`, `created_at`).
+
+2. **Corrigir inconsistências**:
+   - Todos os IDs devem ser `UUID`.
+   - `movements.product_id` deve referenciar `products.id`.
+   - `movements.compartment_id` deve referenciar `compartments.id`.
+   - `movements.user_id` deve referenciar `profiles.id` (ou criar um `default test user`).
+   - Se houver referências a tabelas antigas (`produtos`, `movimentos`, `usuarios`), eliminar e ajustar para `products`, `movements`, `profiles`.
+
+3. **Implementar conversores automáticos**:
+   - Se `compartment_id` vier como `"1A1"`, converter para o UUID correto da tabela `compartments`.
+   - Se `type` vier como `"entrada"` ou `"saida"`, mapear para `"ENTRADA"` ou `"SAIDA"`.
+
+4. **Rodar teste automatizado completo**:
+   - Criar 5 produtos fictícios (`AUTO1` a `AUTO5`).
+   - Para cada produto:
+     - Entrada de 100 unidades.
+     - Saída de 30 unidades.
+   - Consultar saldos finais.
+
+5. **Gerar relatório consolidado**:
+   - Mostrar Produto, Compartimento, Esperado (70), Real (saldo do Supabase), Status (✅ ou ❌).
+
+6. **Autocorreção**:
+   - Se algum saldo não bater, ajuste o schema/código automaticamente e repita os testes até que todos estejam corretos.
+
+⚠️ Use a `SUPABASE_SERVICE_ROLE_KEY` para contornar o RLS.  
+⚠️ Garanta que todas as operações sejam feitas no **schema public**.
+
+🎯 Objetivo final: Todos os 5 produtos com saldo correto de **70 unidades** no Supabase, sem erros 
