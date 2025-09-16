@@ -1,0 +1,62 @@
+TAREFA: Tornar o sistema StockFlow operacional em produção, acessível publicamente.
+
+OBJETIVOS PRINCIPAIS:
+✅ Publicar o app no Replit com link público fixo
+✅ Configurar banco de dados de produção alinhado ao schema corrigido
+✅ Ajustar backend e variáveis de ambiente para produção
+✅ Validar funcionamento completo com teste final
+
+ETAPAS DETALHADAS:
+
+1. Publicação do App
+- Definir Primary URL: stock-flow-controladoriasu
+- Habilitar "Create production database upon publishing"
+- Se necessário, copiar dados do desenvolvimento → habilitar "Set up your production database with your current development data"
+- Executar o publish
+- Confirmar que o link público funciona: https://stock-flow-controladoriasu.replit.app
+
+2. Banco de Dados de Produção
+- Garantir schema em produção alinhado:
+  - products.id → BIGINT
+  - compartments.id → BIGINT
+  - movements.product_id → BIGINT
+  - movements.compartment_id → BIGINT
+  - movements.user_id → UUID
+- Conferir constraints e foreign keys:
+  - movements.product_id → products.id
+  - movements.compartment_id → compartments.id
+  - movements.user_id → profiles.id
+- Confirmar que não existem tabelas antigas (produtos, movimentos, usuarios)
+
+3. Backend Produção
+- Configurar variáveis no ambiente Replit:
+  - SUPABASE_URL
+  - SUPABASE_ANON_KEY
+  - SUPABASE_SERVICE_ROLE_KEY
+- Garantir que todas as rotas funcionam em produção (200 OK):
+  - /api/products
+  - /api/compartments
+  - /api/movements
+  - /api/stock
+  - /api/profiles
+- Revisar supabaseStorage.ts e client/src/types/database.ts para refletir BIGINT/UUID corretamente
+
+4. Teste Final
+- Criar 5 produtos fictícios (1A1 a 1A5)
+- Inserir 100 unidades em cada
+- Retirar 30 unidades em cada
+- Consultar saldo esperado (70)
+- Imprimir no console:
+
+🛒 Produto X | Endereço: Y | Esperado: 70 | Real: Z
+
+5. Relatório Final
+- Confirmar:
+  ✅ App publicado e acessível
+  ✅ Banco produção ativo e consistente
+  ✅ Backend 100% operacional
+  ✅ Teste com saldo final correto = 70
+- Imprimir no console um resumo consolidado da auditoria em produção
+
+MISSÃO FINAL:
+"PASS: StockFlow publicado e validado em produção, disponível publicamente com backend e banco alinhados, pronto para uso pelos administradores e auxiliares de estoque."
