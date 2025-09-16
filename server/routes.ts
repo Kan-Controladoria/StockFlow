@@ -86,7 +86,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication/Profile routes
   app.get("/api/profiles", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Profiles not implemented with Supabase yet' });
+      const { data, error } = await supabaseStorage.supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw new Error(`Error fetching profiles: ${error.message}`);
+      
+      res.json(data || []);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -94,7 +101,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/profiles/:id", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Profile lookup not implemented with Supabase yet' });
+      const profileId = req.params.id;
+      
+      // UUID validation
+      if (typeof profileId !== 'string' || !profileId.trim()) {
+        return res.status(400).json({ error: "Invalid UUID profile ID" });
+      }
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', profileId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw new Error(`Error fetching profile: ${error.message}`);
+      }
+      
+      if (!data) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+      
+      res.json(data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -102,7 +130,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/profiles", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Profile creation not implemented with Supabase yet' });
+      const { email, full_name } = req.body;
+      
+      // Validate required fields
+      if (!email || typeof email !== 'string' || !email.trim()) {
+        return res.status(400).json({ error: "email is required and must be a non-empty string" });
+      }
+      
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Invalid email format" });
+      }
+      
+      const profileData = {
+        email: email.trim(),
+        full_name: full_name ? full_name.trim() : null
+      };
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('profiles')
+        .insert(profileData)
+        .select()
+        .single();
+      
+      if (error) {
+        if (error.code === '23505') { // Unique constraint violation
+          return res.status(409).json({ error: "Email already exists" });
+        }
+        throw new Error(`Error creating profile: ${error.message}`);
+      }
+      
+      res.status(201).json(data);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -172,8 +231,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products/:id", async (req, res) => {
     try {
       const productId = parseInt(req.params.id, 10);
-      if (isNaN(productId)) {
-        return res.status(400).json({ error: "Invalid product ID" });
+      if (isNaN(productId) || productId <= 0) {
+        return res.status(400).json({ error: "Invalid BIGINT product ID - must be positive integer" });
       }
       const product = await supabaseStorage.getProduct(productId);
       if (!product) {
@@ -206,8 +265,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/products/:id", async (req, res) => {
     try {
-      // Atualização via Supabase - implementar se necessário
-      res.status(501).json({ error: 'Update not implemented with Supabase yet' });
+      const productId = parseInt(req.params.id, 10);
+      if (isNaN(productId) || productId <= 0) {
+        return res.status(400).json({ error: "Invalid BIGINT product ID - must be positive integer" });
+      }
+      
+      // Validate product exists first
+      const existingProduct = await supabaseStorage.getProduct(productId);
+      if (!existingProduct) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      
+      // Map frontend field names to Supabase products table schema
+      const productData = {
+        codigo_barras: req.body.codigo_barras || req.body.codigo_produto || req.body.codigo,
+        produto: req.body.produto || req.body.nome,
+        codigo_produto: req.body.codigo_produto || req.body.codigo,
+        departamento: req.body.departamento,
+        categoria: req.body.categoria,
+        subcategoria: req.body.subcategoria
+      };
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('products')
+        .update(productData)
+        .eq('id', productId)
+        .select()
+        .single();
+      
+      if (error) throw new Error(`Error updating product: ${error.message}`);
+      
+      res.json(data);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -215,8 +303,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/products/:id", async (req, res) => {
     try {
-      // Exclusão via Supabase - implementar se necessário
-      res.status(501).json({ error: 'Delete not implemented with Supabase yet' });
+      const productId = parseInt(req.params.id, 10);
+      if (isNaN(productId) || productId <= 0) {
+        return res.status(400).json({ error: "Invalid BIGINT product ID - must be positive integer" });
+      }
+      
+      // Validate product exists first
+      const existingProduct = await supabaseStorage.getProduct(productId);
+      if (!existingProduct) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      
+      // Check for related movements before deletion
+      const movements = await supabaseStorage.getMovementsByProduct(productId);
+      if (movements.length > 0) {
+        return res.status(409).json({ 
+          error: "Cannot delete product - has related movements",
+          movementCount: movements.length
+        });
+      }
+      
+      const { error } = await supabaseStorage.supabase
+        .from('products')
+        .delete()
+        .eq('id', productId);
+      
+      if (error) throw new Error(`Error deleting product: ${error.message}`);
+      
+      res.json({ message: "Product deleted successfully", id: productId });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -225,7 +339,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Compartment routes
   app.get("/api/compartments", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Compartments not implemented with Supabase yet' });
+      const { data, error } = await supabaseStorage.supabase
+        .from('compartments')
+        .select('*')
+        .order('address');
+      
+      if (error) throw new Error(`Error fetching compartments: ${error.message}`);
+      
+      res.json(data || []);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -233,7 +354,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/compartments/with-stock", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Compartments with stock not implemented with Supabase yet' });
+      const { data, error } = await supabaseStorage.supabase
+        .from('compartments')
+        .select(`
+          *,
+          stock_by_compartment (
+            quantity,
+            products (
+              id,
+              produto,
+              codigo_produto
+            )
+          )
+        `)
+        .order('address');
+      
+      if (error) throw new Error(`Error fetching compartments with stock: ${error.message}`);
+      
+      // Filter compartments that have stock
+      const compartmentsWithStock = (data || []).filter(compartment => 
+        compartment.stock_by_compartment && compartment.stock_by_compartment.length > 0
+      );
+      
+      res.json(compartmentsWithStock);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -241,7 +384,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/compartments/:id", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Compartment lookup not implemented with Supabase yet' });
+      const compartmentId = parseInt(req.params.id, 10);
+      if (isNaN(compartmentId) || compartmentId <= 0) {
+        return res.status(400).json({ error: "Invalid BIGINT compartment ID - must be positive integer" });
+      }
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('compartments')
+        .select(`
+          *,
+          stock_by_compartment (
+            quantity,
+            products (
+              id,
+              produto,
+              codigo_produto
+            )
+          )
+        `)
+        .eq('id', compartmentId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw new Error(`Error fetching compartment: ${error.message}`);
+      }
+      
+      if (!data) {
+        return res.status(404).json({ error: "Compartment not found" });
+      }
+      
+      res.json(data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -249,7 +421,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/compartments", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Compartment creation not implemented with Supabase yet' });
+      const { address, corredor, linha, coluna } = req.body;
+      
+      // Validate required fields
+      if (!address || !corredor || !linha || !coluna) {
+        return res.status(400).json({ 
+          error: "Missing required fields: address, corredor, linha, coluna" 
+        });
+      }
+      
+      // Validate field types
+      if (!Number.isInteger(corredor) || corredor <= 0) {
+        return res.status(400).json({ error: "corredor must be a positive integer" });
+      }
+      
+      if (!Number.isInteger(coluna) || coluna <= 0) {
+        return res.status(400).json({ error: "coluna must be a positive integer" });
+      }
+      
+      if (typeof linha !== 'string' || !linha.trim()) {
+        return res.status(400).json({ error: "linha must be a non-empty string" });
+      }
+      
+      const compartmentData = {
+        address: address.trim(),
+        corredor,
+        linha: linha.trim(),
+        coluna
+      };
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('compartments')
+        .insert(compartmentData)
+        .select()
+        .single();
+      
+      if (error) throw new Error(`Error creating compartment: ${error.message}`);
+      
+      res.status(201).json(data);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -261,15 +470,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { compartmentId, productId } = req.query;
       
       if (productId) {
-        // Use Supabase method for product stock
+        // Validate BIGINT product ID
         const productIdNum = parseInt(productId as string, 10);
-        if (isNaN(productIdNum)) {
-          return res.status(400).json({ error: "Invalid product ID" });
+        if (isNaN(productIdNum) || productIdNum <= 0) {
+          return res.status(400).json({ error: "Invalid BIGINT product ID - must be positive integer" });
         }
         const stock = await supabaseStorage.getProductStock(productIdNum);
-        res.json({ product_id: productId, quantity: stock });
+        res.json({ product_id: productIdNum, quantity: stock });
+      } else if (compartmentId) {
+        // Validate BIGINT compartment ID and get stock for compartment
+        const compartmentIdNum = parseInt(compartmentId as string, 10);
+        if (isNaN(compartmentIdNum) || compartmentIdNum <= 0) {
+          return res.status(400).json({ error: "Invalid BIGINT compartment ID - must be positive integer" });
+        }
+        
+        const { data, error } = await supabaseStorage.supabase
+          .from('stock_by_compartment')
+          .select(`
+            *,
+            products (
+              id,
+              produto,
+              codigo_produto
+            ),
+            compartments (
+              id,
+              address
+            )
+          `)
+          .eq('compartment_id', compartmentIdNum);
+        
+        if (error) throw new Error(`Error fetching compartment stock: ${error.message}`);
+        
+        res.json(data || []);
       } else {
-        res.status(501).json({ error: 'Stock queries not implemented with Supabase yet' });
+        // Get all stock entries
+        const { data, error } = await supabaseStorage.supabase
+          .from('stock_by_compartment')
+          .select(`
+            *,
+            products (
+              id,
+              produto,
+              codigo_produto
+            ),
+            compartments (
+              id,
+              address
+            )
+          `)
+          .order('quantity', { ascending: false });
+        
+        if (error) throw new Error(`Error fetching all stock: ${error.message}`);
+        
+        res.json(data || []);
       }
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -278,7 +532,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stock", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Stock creation not implemented with Supabase yet' });
+      const { compartment_id, product_id, quantity } = req.body;
+      
+      // Validate required fields
+      if (!compartment_id || !product_id || quantity === undefined) {
+        return res.status(400).json({ 
+          error: "Missing required fields: compartment_id, product_id, quantity" 
+        });
+      }
+      
+      // Validate BIGINT IDs
+      if (!Number.isInteger(compartment_id) || compartment_id <= 0) {
+        return res.status(400).json({ error: "compartment_id must be a positive BIGINT integer" });
+      }
+      
+      if (!Number.isInteger(product_id) || product_id <= 0) {
+        return res.status(400).json({ error: "product_id must be a positive BIGINT integer" });
+      }
+      
+      if (!Number.isInteger(quantity) || quantity < 0) {
+        return res.status(400).json({ error: "quantity must be a non-negative integer" });
+      }
+      
+      // Verify product and compartment exist
+      const product = await supabaseStorage.getProduct(product_id);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      
+      const { data: compartment, error: compartmentError } = await supabaseStorage.supabase
+        .from('compartments')
+        .select('id')
+        .eq('id', compartment_id)
+        .single();
+      
+      if (compartmentError || !compartment) {
+        return res.status(404).json({ error: "Compartment not found" });
+      }
+      
+      const stockData = {
+        compartment_id,
+        product_id,
+        quantity
+      };
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('stock_by_compartment')
+        .insert(stockData)
+        .select()
+        .single();
+      
+      if (error) throw new Error(`Error creating stock entry: ${error.message}`);
+      
+      res.status(201).json(data);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -286,7 +592,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/stock/:id", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Stock update not implemented with Supabase yet' });
+      const stockId = parseInt(req.params.id, 10);
+      if (isNaN(stockId) || stockId <= 0) {
+        return res.status(400).json({ error: "Invalid stock ID - must be positive integer" });
+      }
+      
+      const { quantity } = req.body;
+      
+      // Validate quantity
+      if (quantity === undefined || !Number.isInteger(quantity) || quantity < 0) {
+        return res.status(400).json({ error: "quantity must be a non-negative integer" });
+      }
+      
+      // Check if stock entry exists
+      const { data: existingStock, error: fetchError } = await supabaseStorage.supabase
+        .from('stock_by_compartment')
+        .select('*')
+        .eq('id', stockId)
+        .single();
+      
+      if (fetchError || !existingStock) {
+        return res.status(404).json({ error: "Stock entry not found" });
+      }
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('stock_by_compartment')
+        .update({ quantity })
+        .eq('id', stockId)
+        .select()
+        .single();
+      
+      if (error) throw new Error(`Error updating stock: ${error.message}`);
+      
+      res.json(data);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -294,7 +632,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/stock/:id", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Stock deletion not implemented with Supabase yet' });
+      const stockId = parseInt(req.params.id, 10);
+      if (isNaN(stockId) || stockId <= 0) {
+        return res.status(400).json({ error: "Invalid stock ID - must be positive integer" });
+      }
+      
+      // Check if stock entry exists
+      const { data: existingStock, error: fetchError } = await supabaseStorage.supabase
+        .from('stock_by_compartment')
+        .select('*')
+        .eq('id', stockId)
+        .single();
+      
+      if (fetchError || !existingStock) {
+        return res.status(404).json({ error: "Stock entry not found" });
+      }
+      
+      const { error } = await supabaseStorage.supabase
+        .from('stock_by_compartment')
+        .delete()
+        .eq('id', stockId);
+      
+      if (error) throw new Error(`Error deleting stock entry: ${error.message}`);
+      
+      res.json({ message: "Stock entry deleted successfully", id: stockId });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -312,12 +673,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId 
       } = req.query;
 
-      if (startDate || endDate || type || productId || compartmentId || userId) {
-        res.status(501).json({ error: 'Filtered movements not implemented with Supabase yet' });
-      } else {
-        const movements = await supabaseStorage.getAllMovements();
-        res.json(movements);
+      let query = supabaseStorage.supabase
+        .from('movements')
+        .select(`
+          *,
+          products (
+            id,
+            produto,
+            codigo_produto
+          ),
+          compartments (
+            id,
+            address
+          ),
+          profiles (
+            id,
+            full_name,
+            email
+          )
+        `);
+      
+      // Apply filters
+      if (startDate) {
+        query = query.gte('timestamp', startDate);
       }
+      
+      if (endDate) {
+        query = query.lte('timestamp', endDate);
+      }
+      
+      if (type && (type === 'ENTRADA' || type === 'SAIDA')) {
+        query = query.eq('tipo', type);
+      }
+      
+      if (productId) {
+        const productIdNum = parseInt(productId as string, 10);
+        if (isNaN(productIdNum) || productIdNum <= 0) {
+          return res.status(400).json({ error: "Invalid BIGINT product ID - must be positive integer" });
+        }
+        query = query.eq('product_id', productIdNum);
+      }
+      
+      if (compartmentId) {
+        const compartmentIdNum = parseInt(compartmentId as string, 10);
+        if (isNaN(compartmentIdNum) || compartmentIdNum <= 0) {
+          return res.status(400).json({ error: "Invalid BIGINT compartment ID - must be positive integer" });
+        }
+        query = query.eq('compartment_id', compartmentIdNum);
+      }
+      
+      if (userId) {
+        // UUID validation for user_id
+        if (typeof userId !== 'string' || !userId.trim()) {
+          return res.status(400).json({ error: "Invalid UUID user ID" });
+        }
+        query = query.eq('user_id', userId);
+      }
+      
+      const { data, error } = await query.order('timestamp', { ascending: false });
+      
+      if (error) throw new Error(`Error fetching movements: ${error.message}`);
+      
+      res.json(data || []);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -325,7 +742,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movements/compartment/:id", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Movements by compartment not implemented with Supabase yet' });
+      const compartmentId = parseInt(req.params.id, 10);
+      if (isNaN(compartmentId) || compartmentId <= 0) {
+        return res.status(400).json({ error: "Invalid BIGINT compartment ID - must be positive integer" });
+      }
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('movements')
+        .select(`
+          *,
+          products (
+            id,
+            produto,
+            codigo_produto
+          ),
+          compartments (
+            id,
+            address
+          ),
+          profiles (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .eq('compartment_id', compartmentId)
+        .order('timestamp', { ascending: false });
+      
+      if (error) throw new Error(`Error fetching movements by compartment: ${error.message}`);
+      
+      res.json(data || []);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -334,11 +780,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/movements/product/:id", async (req, res) => {
     try {
       const productId = parseInt(req.params.id, 10);
-      if (isNaN(productId)) {
-        return res.status(400).json({ error: "Invalid product ID" });
+      if (isNaN(productId) || productId <= 0) {
+        return res.status(400).json({ error: "Invalid BIGINT product ID - must be positive integer" });
       }
-      const movements = await supabaseStorage.getMovementsByProduct(productId);
-      res.json(movements);
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('movements')
+        .select(`
+          *,
+          products (
+            id,
+            produto,
+            codigo_produto
+          ),
+          compartments (
+            id,
+            address
+          ),
+          profiles (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .eq('product_id', productId)
+        .order('timestamp', { ascending: false });
+      
+      if (error) throw new Error(`Error fetching movements by product: ${error.message}`);
+      
+      res.json(data || []);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -346,7 +816,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movements/user/:id", async (req, res) => {
     try {
-      res.status(501).json({ error: 'Movements by user not implemented with Supabase yet' });
+      const userId = req.params.id;
+      
+      // UUID validation for user_id
+      if (typeof userId !== 'string' || !userId.trim()) {
+        return res.status(400).json({ error: "Invalid UUID user ID" });
+      }
+      
+      const { data, error } = await supabaseStorage.supabase
+        .from('movements')
+        .select(`
+          *,
+          products (
+            id,
+            produto,
+            codigo_produto
+          ),
+          compartments (
+            id,
+            address
+          ),
+          profiles (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false });
+      
+      if (error) throw new Error(`Error fetching movements by user: ${error.message}`);
+      
+      res.json(data || []);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -439,15 +940,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { productId } = req.params;
       const productIdNum = parseInt(productId, 10);
-      if (isNaN(productIdNum)) {
-        return res.status(400).json({ error: "Invalid product ID" });
+      if (isNaN(productIdNum) || productIdNum <= 0) {
+        return res.status(400).json({ error: "Invalid BIGINT product ID - must be positive integer" });
       }
       
       // Get product stock from Supabase movements
       const totalStock = await supabaseStorage.getProductStock(productIdNum);
       
       res.json({
-        product_id: productId,
+        product_id: productIdNum,
         saldo: totalStock,
         compartments: []
       });
