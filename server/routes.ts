@@ -421,9 +421,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create movement using the storage layer
       const movement = await supabaseStorage.createMovement({
-        user_id: typeof defaultUser.id === 'number' ? defaultUser.id : 1, // Ensure number type for user_id
+        user_id: defaultUser.id, // UUID string for user_id
         product_id: product_id,
-        compartment_id: finalCompartmentId, // UUID from database lookup
+        compartment_id: finalCompartmentId, // BIGINT number from address lookup
         tipo: tipo,
         qty: qty
       });

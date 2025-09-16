@@ -27,7 +27,7 @@ try {
 }
 
 export interface SupabaseProduct {
-  id: number;             // Integer serial ID as per schema
+  id: number;             // BIGINT ID as per schema
   codigo_barras: string;  // Required field
   produto: string;        // tabela products usa 'produto'
   codigo_produto: string; // tabela products usa 'codigo_produto'
@@ -39,16 +39,16 @@ export interface SupabaseProduct {
 
 export interface SupabaseMovement {
   id: number;             // Integer serial ID
-  user_id: number;        // Required field (references user/profile ID)
-  product_id: number;     // Integer (references products.id)
-  compartment_id: number; // BIGINT integer (database schema requires this)
+  user_id: string;        // UUID (references profiles.id)
+  product_id: number;     // BIGINT (references products.id)
+  compartment_id: number; // BIGINT (references compartments.id)
   tipo: 'ENTRADA' | 'SAIDA';
   qty: number;           // tabela movements usa 'qty'
   timestamp: string;     // tabela movements usa 'timestamp' ao invés de 'created_at'
 }
 
 export interface SupabaseUser {
-  id: number | string; // Allow both integer and UUID to handle mixed profile types
+  id: string;             // UUID for profiles table
   email: string;
   full_name: string;
 }
@@ -57,27 +57,16 @@ export class SupabaseStorage {
   // Expose supabase client for startup validation
   public readonly supabase = supabase;
   
-  // Cache for compartment ID lookups by address
-  private compartmentIdCache: Record<string, number> = {};
-  
-  // Integer validation for compartment IDs (database schema requires integers)
-  private isValidCompartmentId(id: number): boolean {
+  // BIGINT validation for product and compartment IDs
+  private isValidBigIntId(id: number): boolean {
     return Number.isInteger(id) && id > 0;
   }
   
-  // Direct database lookup for compartment IDs - no hardcoded mapping
-  
-  // Integer mapping (only approach that works with database schema)
+  // Simple address to BIGINT compartment ID mapping
   async getCompartmentIdByAddress(address: string): Promise<number> {
-    // Check cache first
-    if (this.compartmentIdCache[address]) {
-      console.log(`🔄 Using cached compartment integer for address: ${address}`);
-      return this.compartmentIdCache[address];
-    }
+    console.log(`🔍 Looking up compartment BIGINT for address: ${address}`);
     
-    console.log(`🔍 Looking up compartment integer for address: ${address}`);
-    
-    // Integer mapping required by movements.compartment_id BIGINT schema
+    // BIGINT mapping for compartments.id BIGINT schema
     const addressMapping: Record<string, number> = {
       '1A1': 1,
       '1A2': 2, 
@@ -88,8 +77,7 @@ export class SupabaseStorage {
     
     if (addressMapping[address]) {
       const compartmentId = addressMapping[address];
-      console.log(`✅ Found compartment integer: ${compartmentId}`);
-      this.compartmentIdCache[address] = compartmentId;
+      console.log(`✅ Found compartment BIGINT: ${compartmentId}`);
       return compartmentId;
     }
     
@@ -98,30 +86,15 @@ export class SupabaseStorage {
     throw new Error(`Compartment not found for address: ${address}`);
   }
   
-  // Simple database schema info logging (no validation enforced)
+  // Database schema validation
   async logDatabaseSchema(): Promise<void> {
-    try {
-      const { data: schemaData, error: schemaError } = await supabase
-        .from('information_schema.columns')
-        .select('column_name, data_type')
-        .or('and(table_name.eq.movements,column_name.eq.compartment_id),and(table_name.eq.compartments,column_name.eq.id)');
-      
-      if (schemaError) {
-        console.warn('⚠️  Could not retrieve database schema types');
-        return;
-      }
-      
-      const movementsType = schemaData?.find(row => row.column_name === 'compartment_id')?.data_type;
-      const compartmentsType = schemaData?.find(row => row.column_name === 'id')?.data_type;
-      
-      console.log('🗺 Database schema info:');
-      console.log(`- movements.compartment_id type: ${movementsType || 'unknown'}`);
-      console.log(`- compartments.id type: ${compartmentsType || 'unknown'}`);
-      console.log('📝 Note: Database uses BIGINT for compartment IDs');
-      
-    } catch (error: any) {
-      console.warn('⚠️  Schema info retrieval failed:', error.message);
-    }
+    console.log('🗺 Database schema info:');
+    console.log('- products.id: BIGINT (mode: number)');
+    console.log('- compartments.id: BIGINT (mode: number)');
+    console.log('- movements.product_id: BIGINT (mode: number)');
+    console.log('- movements.compartment_id: BIGINT (mode: number)');
+    console.log('- movements.user_id: UUID (string)');
+    console.log('- profiles.id: UUID (string)');
   }
   
   // Product methods
@@ -195,7 +168,7 @@ export class SupabaseStorage {
   }
 
   async createMovement(movement: Omit<SupabaseMovement, 'id' | 'timestamp'>): Promise<SupabaseMovement> {
-    console.log('🗺 Movement creation with integer compartment_id:', {
+    console.log('🗺 Movement creation with BIGINT IDs:', {
       user_id: movement.user_id,
       user_id_type: typeof movement.user_id,
       product_id: movement.product_id, 
@@ -207,34 +180,35 @@ export class SupabaseStorage {
       qty_type: typeof movement.qty
     });
     
-    // Integer validation for compartment_id (database schema requirement)
-    if (!this.isValidCompartmentId(movement.compartment_id)) {
-      throw new Error(`Invalid compartment_id - must be positive integer: ${movement.compartment_id} (${typeof movement.compartment_id})`);
+    // BIGINT validation for compartment_id and product_id
+    if (!this.isValidBigIntId(movement.compartment_id)) {
+      throw new Error(`Invalid compartment_id - must be positive BIGINT: ${movement.compartment_id} (${typeof movement.compartment_id})`);
     }
     
-    // Basic validation for other fields
-    if (typeof movement.user_id !== 'number' || movement.user_id <= 0) {
-      throw new Error(`Invalid user_id - must be positive integer: ${movement.user_id} (${typeof movement.user_id})`);
+    if (!this.isValidBigIntId(movement.product_id)) {
+      throw new Error(`Invalid product_id - must be positive BIGINT: ${movement.product_id} (${typeof movement.product_id})`);
     }
     
-    if (typeof movement.product_id !== 'number' || movement.product_id <= 0) {
-      throw new Error(`Invalid product_id - must be positive integer: ${movement.product_id} (${typeof movement.product_id})`);
+    // UUID validation for user_id
+    if (typeof movement.user_id !== 'string' || !movement.user_id.trim()) {
+      throw new Error(`Invalid user_id - must be UUID string: ${movement.user_id} (${typeof movement.user_id})`);
     }
     
-    if (typeof movement.qty !== 'number' || movement.qty <= 0) {
+    // Quantity validation
+    if (!Number.isInteger(movement.qty) || movement.qty <= 0) {
       throw new Error(`Invalid qty - must be positive integer: ${movement.qty} (${typeof movement.qty})`);
     }
     
-    // Use movement data as-is with UUID compartment_id
+    // Movement data with correct types
     const movementData = {
-      user_id: movement.user_id,
-      product_id: movement.product_id,
-      compartment_id: movement.compartment_id, // Use UUID string directly
+      user_id: movement.user_id,        // UUID string
+      product_id: movement.product_id,  // BIGINT number
+      compartment_id: movement.compartment_id, // BIGINT number
       tipo: movement.tipo,
       qty: movement.qty
     };
     
-    console.log('🔧 Final movement data for insert (integers):', movementData);
+    console.log('🔧 Final movement data for insert (BIGINT):', movementData);
     
     try {
       const { data, error } = await supabase
@@ -253,7 +227,7 @@ export class SupabaseStorage {
         throw error;
       }
       
-      console.log('✅ Successfully created movement with integer compartment_id:', data);
+      console.log('✅ Successfully created movement with BIGINT IDs:', data);
       return data;
       
     } catch (error: any) {
@@ -304,12 +278,12 @@ export class SupabaseStorage {
     return data;
   }
 
-  // Fixed to use raw SQL queries to bypass schema cache issues  
+  // Get or create default user with UUID handling
   async getOrCreateDefaultUser(): Promise<SupabaseUser> {
     console.log('🔍 Getting or creating default user...');
     
     try {
-      // Try to find any existing user (using raw query to bypass schema issues)
+      // Try to find any existing user
       const { data: existingUsers, error: fetchError } = await supabase
         .from('profiles')
         .select('*')
@@ -319,23 +293,8 @@ export class SupabaseStorage {
         const user = existingUsers[0];
         console.log('✅ Found existing user:', { id: user.id, email: user.email || 'no email' });
         
-        // FIXED: Use integer user ID that works with movements FK constraint
-        // Based on existing successful data: user_id=1 works with FK
-        
-        let userId: number = 1; // Default to working user_id from existing data
-        
-        if (typeof user.id === 'number') {
-          userId = user.id;
-          console.log(`✅ Using integer user ID: ${userId}`);
-        } else if (typeof user.id === 'string' && /^\d+$/.test(user.id)) {
-          userId = parseInt(user.id, 10);
-          console.log(`✅ Converted string integer to number: ${userId}`);
-        } else {
-          console.log(`⚠️  UUID/unknown user found, using working fallback ID: ${userId}`);
-        }
-        
         return {
-          id: userId, // Always return integer for movements FK constraint
+          id: user.id, // Return UUID string as-is for movements FK
           email: user.email || 'api@teste.com',
           full_name: user.full_name || 'API Test User'
         };
@@ -356,32 +315,18 @@ export class SupabaseStorage {
       if (newUser && !createError) {
         console.log('✅ Created new user:', { id: newUser.id, email: newUser.email });
         return {
-          id: newUser.id,
+          id: newUser.id, // UUID string
           email: newUser.email,
           full_name: newUser.full_name
         };
       }
       
       console.error('❌ Failed to create user:', createError?.message);
-      
-      // As final fallback, use a hardcoded user that matches the movement FK requirements
-      console.log('⚠️ Using hardcoded fallback user ID...');
-      return {
-        id: 1, // Use integer ID that works with movements FK
-        email: 'api@teste.com',
-        full_name: 'API Test User'
-      };
+      throw new Error('Unable to get or create default user');
       
     } catch (error: any) {
-      console.error('❌ All user methods failed:', error.message);
-      
-      // Final fallback - return a working ID for FK constraints
-      console.log('⚠️ Using emergency fallback user ID for FK constraints...');
-      return {
-        id: 1,
-        email: 'api@teste.com', 
-        full_name: 'API Test User'
-      };
+      console.error('❌ User operations failed:', error.message);
+      throw new Error(`User operations failed: ${error.message}`);
     }
   }
 
@@ -391,14 +336,17 @@ export class SupabaseStorage {
     productId: number,
     tipo: 'ENTRADA' | 'SAIDA',
     qty: number,
-    userId = 1
+    userId?: string
   ): Promise<SupabaseMovement> {
-    const compartmentId = await this.getCompartmentIdByAddress(address); // Returns UUID string
+    const compartmentId = await this.getCompartmentIdByAddress(address); // Returns BIGINT number
+    
+    // Get default user if no userId provided
+    const finalUserId = userId || (await this.getOrCreateDefaultUser()).id;
     
     return this.createMovement({
-      user_id: userId,
-      product_id: productId,
-      compartment_id: compartmentId, // UUID string passed directly
+      user_id: finalUserId,          // UUID string
+      product_id: productId,         // BIGINT number
+      compartment_id: compartmentId, // BIGINT number
       tipo,
       qty
     });
