@@ -347,25 +347,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add missing /api/db-compartments route that frontend calls
+  // FIXED: /api/db-compartments route using direct PostgreSQL connection
   app.get("/api/db-compartments", async (req, res) => {
     try {
-      // Direct database query to get compartments with codigo_endereco
-      const { data, error } = await supabaseStorage.supabase
-        .from('compartments')
-        .select('id, codigo_endereco, corredor, linha, coluna')
-        .order('id');
+      console.log('🔧 [FIXED] Using PostgreSQL direct connection for db-compartments...');
       
-      if (error) throw new Error(`Error fetching db compartments: ${error.message}`);
+      // Use corrected storage method with direct PostgreSQL
+      const compartments = await supabaseStorage.getAllCompartments();
       
-      // Map codigo_endereco to address for frontend compatibility
-      const compartments = (data || []).map(comp => ({
-        ...comp,
-        address: comp.codigo_endereco || `${comp.corredor}${comp.linha}${comp.coluna}`  // Synthesize when codigo_endereco is NULL
-      }));
-      
+      console.log('✅ [FIXED] Successfully fetched', compartments.length, 'compartments with address field');
       res.json(compartments);
     } catch (error: any) {
+      console.error('❌ [FIXED] Route error:', error.message);
       res.status(500).json({ error: error.message });
     }
   });
@@ -480,7 +473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const compartmentData = {
-        codigo_endereco: address.trim(),
+        address: address.trim(),
         corredor,
         linha: linha.trim(),
         coluna

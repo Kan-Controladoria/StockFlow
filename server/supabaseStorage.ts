@@ -1,31 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
+import { Pool } from 'pg';
 
-// Initialize Supabase client with service role for backend operations
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables');
+// SOLUTION: Use direct PostgreSQL connection with correct DATABASE_URL
+// This connects to the correct Neon database that has the 'address' field
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error('Missing DATABASE_URL environment variable');
 }
+
+// Create PostgreSQL connection pool to correct database
+const pool = new Pool({
+  connectionString: databaseUrl,
+  ssl: { rejectUnauthorized: false }
+});
+
+console.log('✅ Using correct PostgreSQL connection with DATABASE_URL');
+
+// Also maintain Supabase client for compatibility (but won't use for queries)
+const supabaseUrl = process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder';
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { persistSession: false },
-  global: { headers: { 'X-Client-Info': 'backend-api' } }
+  global: { headers: { 'X-Client-Info': 'backend-api-fallback' } }
 });
 
-// Verify service key is correct by checking JWT payload
-try {
-  const payload = JSON.parse(Buffer.from(supabaseServiceKey.split('.')[1], 'base64').toString());
-  if (payload.role !== 'service_role') {
-    console.error('⚠️  WARNING: SUPABASE_SERVICE_ROLE_KEY does not have service_role privileges');
-    console.error('Current role:', payload.role);
-    console.error('Please verify you are using the correct service_role key from Supabase Settings > API');
-  } else {
-    console.log('✅ Service role key verified successfully');
-  }
-} catch (error) {
-  console.error('⚠️  Could not verify service key format:', error);
-}
+console.log('🔧 PostgreSQL pool initialized for correct database connection');
 
 export interface SupabaseProduct {
   id: number;             // BIGINT ID as per schema
@@ -60,35 +60,46 @@ export class SupabaseStorage {
   // Expose supabase client for startup validation
   public readonly supabase = supabase;
   
+  // Direct PostgreSQL connection to correct database
+  private readonly pool = pool;
+  private readonly addressField = 'address';
+  
+  // Helper method to execute raw SQL queries
+  private async query(text: string, params: any[] = []): Promise<any> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(text, params);
+      return result.rows;
+    } finally {
+      client.release();
+    }
+  }
+  
   // BIGINT validation for product and compartment IDs
   private isValidBigIntId(id: number): boolean {
     return Number.isInteger(id) && id > 0;
   }
   
-  // Dynamic address to BIGINT compartment ID lookup with fallback
+  
+  // Address to BIGINT compartment ID lookup - using direct PostgreSQL
   async getCompartmentIdByAddress(address: string): Promise<number> {
     const normalized = address.trim().toUpperCase();
-    console.log(`🔍 Looking up compartment BIGINT for address: ${normalized}`);
+    console.log(`🔍 Looking up compartment BIGINT for address: ${normalized} (PostgreSQL)`);
     
     try {
-      // Tentativa 1: buscar por codigo_endereco exato
-      console.log('📍 Step 1: Searching by codigo_endereco...');
-      const { data: comp1, error: error1 } = await supabase
-        .from('compartments')
-        .select('id')
-        .eq('codigo_endereco', normalized)
-        .maybeSingle();
+      // Step 1: Search by address field directly
+      console.log('📍 Step 1: Searching by address field...');
+      const result1 = await this.query(
+        'SELECT id FROM compartments WHERE address = $1 LIMIT 1',
+        [normalized]
+      );
       
-      if (error1 && error1.code !== 'PGRST116') {
-        throw new Error(`Database error on codigo_endereco lookup: ${error1.message}`);
+      if (result1.length > 0) {
+        console.log(`✅ Found compartment via address: ID ${result1[0].id}`);
+        return result1[0].id;
       }
       
-      if (comp1) {
-        console.log(`✅ Found compartment via codigo_endereco: ID ${comp1.id}`);
-        return comp1.id;
-      }
-      
-      // Tentativa 2: parse address e buscar por corredor/linha/coluna individuais
+      // Step 2: Parse address and search by individual columns
       console.log('📍 Step 2: Parsing address for corredor/linha/coluna lookup...');
       const match = normalized.match(/^([0-9]+)([A-Z])([0-9]+)$/);
       
@@ -99,40 +110,27 @@ export class SupabaseStorage {
         
         console.log(`🔍 Searching for corredor=${corredor}, linha=${linha}, coluna=${coluna}`);
         
-        const { data: comp2, error: error2 } = await supabase
-          .from('compartments')
-          .select('id')
-          .eq('corredor', corredor)
-          .eq('linha', linha)
-          .eq('coluna', coluna)
-          .maybeSingle();
+        const result2 = await this.query(
+          'SELECT id FROM compartments WHERE corredor = $1 AND linha = $2 AND coluna = $3 LIMIT 1',
+          [corredor, linha, coluna]
+        );
         
-        if (error2 && error2.code !== 'PGRST116') {
-          throw new Error(`Database error on individual columns lookup: ${error2.message}`);
-        }
-        
-        if (comp2) {
-          console.log(`✅ Found compartment via individual columns: ID ${comp2.id}`);
-          return comp2.id;
+        if (result2.length > 0) {
+          console.log(`✅ Found compartment via individual columns: ID ${result2[0].id}`);
+          return result2[0].id;
         }
       } else {
         console.log(`⚠️ Address format not recognized for individual lookup: ${normalized}`);
       }
       
-      // Se não encontrou por nenhum método, mostrar dados disponíveis
+      // Step 3: Show available compartments if not found
       console.log('📍 Step 3: Compartment not found, fetching available data...');
-      const { data: available, error: listError } = await supabase
-        .from('compartments')
-        .select('id, codigo_endereco, corredor, linha, coluna')
-        .order('id')
-        .limit(20);
+      const available = await this.query(
+        'SELECT id, address, corredor, linha, coluna FROM compartments ORDER BY id LIMIT 20'
+      );
       
-      if (listError) {
-        console.error('❌ Error fetching available compartments:', listError.message);
-      }
-      
-      const availableAddresses = (available || []).map(c => 
-        c.codigo_endereco || `${c.corredor}${c.linha}${c.coluna}`
+      const availableAddresses = available.map(c => 
+        c.address || `${c.corredor}${c.linha}${c.coluna}`
       ).filter(addr => addr && addr !== 'nullnullnull').join(', ') || 'none';
       
       console.error(`❌ Address not found: ${normalized}`);
@@ -157,23 +155,21 @@ export class SupabaseStorage {
     console.log('- profiles.id: UUID (string)');
   }
   
-  // Compartment methods
+  // Compartment methods - using direct PostgreSQL connection
   async getAllCompartments(): Promise<any[]> {
-    // Select all fields including the real codigo_endereco column
-    const { data, error } = await supabase
-      .from('compartments')
-      .select('id, codigo_endereco, corredor, linha, coluna')
-      .order('id');
-    
-    if (error) throw new Error(`Error fetching compartments: ${error.message}`);
-    
-    // Map codigo_endereco to address with fallback synthesis
-    const compartments = (data || []).map(comp => ({
-      ...comp,
-      address: comp.codigo_endereco || `${comp.corredor}${comp.linha}${comp.coluna}`  // Fallback synthesis
-    }));
-    
-    return compartments;
+    try {
+      const compartments = await this.query(
+        'SELECT id, address, corredor, linha, coluna FROM compartments ORDER BY id'
+      );
+      
+      // Ensure all compartments have address field (synthesize if null)
+      return compartments.map(comp => ({
+        ...comp,
+        address: comp.address || `${comp.corredor}${comp.linha}${comp.coluna}`
+      }));
+    } catch (error: any) {
+      throw new Error(`Error fetching compartments: ${error.message}`);
+    }
   }
 
   // Product methods

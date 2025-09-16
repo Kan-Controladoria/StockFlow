@@ -59,7 +59,7 @@ export interface Database {
       compartments: {
         Row: {
           id: number
-          codigo_endereco: string
+          address: string
           corredor: number
           linha: string
           coluna: number
@@ -67,7 +67,7 @@ export interface Database {
         }
         Insert: {
           id?: number
-          codigo_endereco: string
+          address: string
           corredor: number
           linha: string
           coluna: number
@@ -75,7 +75,7 @@ export interface Database {
         }
         Update: {
           id?: number
-          codigo_endereco?: string
+          address?: string
           corredor?: number
           linha?: string
           coluna?: number

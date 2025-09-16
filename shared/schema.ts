@@ -27,7 +27,7 @@ export const products = pgTable("products", {
 // Compartments table - 150 fixed compartments (5 corridors x 3 rows x 10 columns)
 export const compartments = pgTable("compartments", {
   id: bigint("id", { mode: 'number' }).generatedAlwaysAsIdentity().primaryKey(),
-  codigo_endereco: text("codigo_endereco").notNull().unique(), // format: 1A1, 1A2, etc.
+  address: text("address").notNull().unique(), // format: 1A1, 1A2, etc.
   corredor: integer("corredor").notNull(),
   linha: text("linha").notNull(), // A, B, C
   coluna: integer("coluna").notNull(),
@@ -71,7 +71,7 @@ export const insertProductSchema = createInsertSchema(products).pick({
 });
 
 export const insertCompartmentSchema = createInsertSchema(compartments).pick({
-  codigo_endereco: true,
+  address: true,
   corredor: true,
   linha: true,
   coluna: true,
