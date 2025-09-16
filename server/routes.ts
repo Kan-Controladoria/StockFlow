@@ -361,7 +361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Map codigo_endereco to address for frontend compatibility
       const compartments = (data || []).map(comp => ({
         ...comp,
-        address: comp.codigo_endereco  // Frontend expects 'address' field
+        address: comp.codigo_endereco || `${comp.corredor}${comp.linha}${comp.coluna}`  // Synthesize when codigo_endereco is NULL
       }));
       
       res.json(compartments);

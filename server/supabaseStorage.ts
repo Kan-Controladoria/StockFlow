@@ -65,36 +65,80 @@ export class SupabaseStorage {
     return Number.isInteger(id) && id > 0;
   }
   
-  // Dynamic address to BIGINT compartment ID lookup using database
+  // Dynamic address to BIGINT compartment ID lookup with fallback
   async getCompartmentIdByAddress(address: string): Promise<number> {
-    console.log(`🔍 Looking up compartment BIGINT for address: ${address}`);
+    const normalized = address.trim().toUpperCase();
+    console.log(`🔍 Looking up compartment BIGINT for address: ${normalized}`);
     
     try {
-      const { data, error } = await supabase
+      // Tentativa 1: buscar por codigo_endereco exato
+      console.log('📍 Step 1: Searching by codigo_endereco...');
+      const { data: comp1, error: error1 } = await supabase
         .from('compartments')
         .select('id')
-        .eq('codigo_endereco', address)
-        .single();
+        .eq('codigo_endereco', normalized)
+        .maybeSingle();
       
-      if (error && error.code !== 'PGRST116') {
-        throw new Error(`Database error: ${error.message}`);
+      if (error1 && error1.code !== 'PGRST116') {
+        throw new Error(`Database error on codigo_endereco lookup: ${error1.message}`);
       }
       
-      if (!data) {
-        // If compartment doesn't exist, list available addresses for debugging
-        const { data: allCompartments, error: listError } = await supabase
-          .from('compartments')
-          .select('codigo_endereco')
-          .order('codigo_endereco');
+      if (comp1) {
+        console.log(`✅ Found compartment via codigo_endereco: ID ${comp1.id}`);
+        return comp1.id;
+      }
+      
+      // Tentativa 2: parse address e buscar por corredor/linha/coluna individuais
+      console.log('📍 Step 2: Parsing address for corredor/linha/coluna lookup...');
+      const match = normalized.match(/^([0-9]+)([A-Z])([0-9]+)$/);
+      
+      if (match) {
+        const [, corridorStr, linha, colunaStr] = match;
+        const corredor = parseInt(corridorStr, 10);
+        const coluna = parseInt(colunaStr, 10);
         
-        const availableAddresses = allCompartments?.map(c => c.codigo_endereco).join(', ') || 'none';
-        console.error(`❌ Address not found: ${address}`);
-        console.error(`📋 Available addresses: ${availableAddresses}`);
-        throw new Error(`Compartment not found for address: ${address}. Available: ${availableAddresses}`);
+        console.log(`🔍 Searching for corredor=${corredor}, linha=${linha}, coluna=${coluna}`);
+        
+        const { data: comp2, error: error2 } = await supabase
+          .from('compartments')
+          .select('id')
+          .eq('corredor', corredor)
+          .eq('linha', linha)
+          .eq('coluna', coluna)
+          .maybeSingle();
+        
+        if (error2 && error2.code !== 'PGRST116') {
+          throw new Error(`Database error on individual columns lookup: ${error2.message}`);
+        }
+        
+        if (comp2) {
+          console.log(`✅ Found compartment via individual columns: ID ${comp2.id}`);
+          return comp2.id;
+        }
+      } else {
+        console.log(`⚠️ Address format not recognized for individual lookup: ${normalized}`);
       }
       
-      console.log(`✅ Found compartment BIGINT: ${data.id}`);
-      return data.id;
+      // Se não encontrou por nenhum método, mostrar dados disponíveis
+      console.log('📍 Step 3: Compartment not found, fetching available data...');
+      const { data: available, error: listError } = await supabase
+        .from('compartments')
+        .select('id, codigo_endereco, corredor, linha, coluna')
+        .order('id')
+        .limit(20);
+      
+      if (listError) {
+        console.error('❌ Error fetching available compartments:', listError.message);
+      }
+      
+      const availableAddresses = (available || []).map(c => 
+        c.codigo_endereco || `${c.corredor}${c.linha}${c.coluna}`
+      ).filter(addr => addr && addr !== 'nullnullnull').join(', ') || 'none';
+      
+      console.error(`❌ Address not found: ${normalized}`);
+      console.error(`📋 Available addresses: ${availableAddresses}`);
+      
+      throw new Error(`Compartment not found for address: ${normalized}. Available: ${availableAddresses}`);
       
     } catch (error: any) {
       console.error(`❌ Error looking up compartment: ${error.message}`);
@@ -123,10 +167,10 @@ export class SupabaseStorage {
     
     if (error) throw new Error(`Error fetching compartments: ${error.message}`);
     
-    // Map codigo_endereco to address for frontend compatibility
+    // Map codigo_endereco to address with fallback synthesis
     const compartments = (data || []).map(comp => ({
       ...comp,
-      address: comp.codigo_endereco  // Provide backward compatibility
+      address: comp.codigo_endereco || `${comp.corredor}${comp.linha}${comp.coluna}`  // Fallback synthesis
     }));
     
     return compartments;
