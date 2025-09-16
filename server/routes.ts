@@ -11,6 +11,79 @@ import {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Debug route to expose Supabase connection information
+  app.get("/api/debug/supabase", async (req, res) => {
+    try {
+      // Extract URL host information
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      
+      let urlHost = 'unknown';
+      let keyRole = 'unknown';
+      let projectRef = 'unknown';
+      
+      if (supabaseUrl) {
+        try {
+          const url = new URL(supabaseUrl);
+          urlHost = url.hostname;
+          // Extract project reference from hostname (format: <project_ref>.supabase.co)
+          projectRef = url.hostname.split('.')[0];
+        } catch (e) {
+          urlHost = 'invalid_url';
+        }
+      }
+      
+      if (supabaseServiceKey) {
+        try {
+          const payload = JSON.parse(Buffer.from(supabaseServiceKey.split('.')[1], 'base64').toString());
+          keyRole = payload.role || 'unknown';
+        } catch (e) {
+          keyRole = 'invalid_key';
+        }
+      }
+      
+      // Get product count using the same client as the API
+      let productCount = 0;
+      try {
+        const products = await supabaseStorage.getAllProducts();
+        productCount = products.length;
+      } catch (error: any) {
+        console.error('Error fetching products for debug:', error.message);
+      }
+      
+      // Test direct connection to verify client works
+      let connectionTest = 'failed';
+      try {
+        const testResult = await supabaseStorage.supabase
+          .from('products')
+          .select('count')
+          .limit(1);
+        connectionTest = testResult.error ? `error: ${testResult.error.message}` : 'success';
+      } catch (error: any) {
+        connectionTest = `exception: ${error.message}`;
+      }
+      
+      res.json({
+        urlHost,
+        projectRef,
+        schema: 'public',
+        keyRole,
+        productCount,
+        connectionTest,
+        environment: {
+          supabaseUrl: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'not_set',
+          hasServiceKey: !!supabaseServiceKey,
+          keyPrefix: supabaseServiceKey ? supabaseServiceKey.substring(0, 20) + '...' : 'not_set'
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ 
+        error: error.message,
+        stack: error.stack?.split('\n').slice(0, 5) // First 5 lines of stack
+      });
+    }
+  });
+
   // Authentication/Profile routes
   app.get("/api/profiles", async (req, res) => {
     try {

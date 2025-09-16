@@ -27,7 +27,7 @@ try {
 }
 
 export interface SupabaseProduct {
-  id: number;
+  id: number;             // Integer serial ID as per mixed-type schema
   codigo_barras: string;  // Required field in serial ID schema
   produto: string;        // tabela products usa 'produto'
   codigo_produto: string; // tabela products usa 'codigo_produto'
@@ -38,9 +38,9 @@ export interface SupabaseProduct {
 }
 
 export interface SupabaseMovement {
-  id: number;
-  product_id: number;    // tabela movements usa 'product_id'
-  compartment_id: number; // tabela movements usa 'compartment_id'
+  id: number;             // Integer serial ID
+  product_id: number;     // Integer (references products.id)
+  compartment_id: string; // UUID string (references compartments.id)
   tipo: 'ENTRADA' | 'SAIDA';
   qty: number;           // tabela movements usa 'qty'
   timestamp: string;     // tabela movements usa 'timestamp' ao invés de 'created_at'
@@ -188,40 +188,21 @@ export class SupabaseStorage {
   }
 
   // Helper method to get compartment ID by address
-  async getCompartmentIdByAddress(address: string): Promise<number | null> {
-    // Early return with hardcode to bypass schema conflicts
-    const compartmentMap: { [key: string]: number } = {
-      '1A1': 1,
-      '2A1': 2, 
-      '3A1': 3,
-      '4A1': 4,
-      '5A1': 5
-    };
-    
-    if (compartmentMap[address]) {
-      return compartmentMap[address];
-    }
-    
-    // Attempt Supabase lookups but never throw
+  async getCompartmentIdByAddress(address: string): Promise<string | null> {
+    // Use live Supabase lookup for UUID compartment IDs
     try {
-      const rpcResult = await supabase.rpc('get_compartment_id_by_address', { 
-        address_param: address 
-      });
-      if (!rpcResult.error && rpcResult.data) {
-        return rpcResult.data;
-      }
-      
       const queryResult = await supabase
         .schema('public')
         .from('compartments')
         .select('id')
         .eq('address', address)
         .single();
+      
       if (!queryResult.error && queryResult.data) {
-        return queryResult.data.id;
+        return queryResult.data.id; // Returns UUID string
       }
       
-      console.warn('Compartment lookup failed:', rpcResult.error?.message || queryResult.error?.message);
+      console.warn('Compartment lookup failed:', queryResult.error?.message);
     } catch (e) {
       console.warn('Compartment lookup exception:', e);
     }

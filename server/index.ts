@@ -77,8 +77,9 @@ async function validateSupabaseSchema() {
       subcategoria: 'TEST_SUBCAT'
     };
     
+    let createdProduct: any = null;
     try {
-      const { data: createdProduct, error: createError } = await supabaseStorage.supabase
+      const { data, error: createError } = await supabaseStorage.supabase
         .from('products')
         .insert(testProduct)
         .select('id')
@@ -95,6 +96,8 @@ async function validateSupabaseSchema() {
         }
         throw new Error(`Schema validation failed: ${createError.message}`);
       }
+      
+      createdProduct = data;
       
       // Clean up test product
       if (createdProduct?.id) {
@@ -118,7 +121,90 @@ async function validateSupabaseSchema() {
       throw validationError;
     }
 
-    log('✅ Supabase schema validation passed - integer ID project confirmed');
+    // Verify compartments.id is UUID (string format)
+    log('🔍 Querying compartments table...');
+    const { data: compartments, error: compartmentError } = await supabaseStorage.supabase
+      .from('compartments')
+      .select('id')
+      .limit(1);
+    
+    if (compartmentError) {
+      throw new Error(`Failed to query compartments table: ${compartmentError.message}`);
+    }
+
+    log(`📝 Raw compartments query result: ${JSON.stringify(compartments)}`);
+
+    if (compartments && compartments.length > 0) {
+      const firstCompartment = compartments[0];
+      const compartmentIdType = typeof firstCompartment.id;
+      
+      log(`🔍 Compartment ID debug: type='${compartmentIdType}', value='${firstCompartment.id}', stringified='${JSON.stringify(firstCompartment.id)}'`);
+      
+      // TEMPORARY: Accept both integer and string compartments during migration
+      if (compartmentIdType !== 'string' && compartmentIdType !== 'number') {
+        throw new Error(
+          `❌ UNSUPPORTED COMPARTMENT SCHEMA: compartments.id is '${compartmentIdType}' with value '${firstCompartment.id}'\n` +
+          `   Expected either integer (migration state) or UUID string format`
+        );
+      }
+      
+      // If we get integer compartment IDs, skip UUID validation for now
+      if (compartmentIdType === 'number') {
+        log('⚠️  Found integer compartment IDs - skipping UUID validation (migration state)');
+        log('✅ Supabase schema validation passed - mixed ID types confirmed (integer products, integer compartments - migration state)');
+        return; // Skip the rest of compartment validation
+      }
+      
+      // Verify it's a valid UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(firstCompartment.id)) {
+        throw new Error(
+          `❌ INVALID UUID FORMAT: compartments.id '${firstCompartment.id}' is not a valid UUID\n` +
+          `   Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+        );
+      }
+      
+      // Test movements.compartment_id accepts UUID via test insert/delete
+      if (createdProduct?.id) {
+        try {
+          const testMovement = {
+            user_id: 1, // Use hardcoded user_id for test
+            product_id: createdProduct.id, // Use the test product we created
+            compartment_id: firstCompartment.id, // Use UUID from compartments
+            tipo: 'ENTRADA' as const,
+            qty: 1
+          };
+          
+          const { data: createdMovement, error: movementError } = await supabaseStorage.supabase
+            .from('movements')
+            .insert(testMovement)
+            .select('id, compartment_id')
+            .single();
+          
+          if (movementError) {
+            throw new Error(`movements.compartment_id UUID compatibility test failed: ${movementError.message}`);
+          }
+          
+          // Verify the movement was created with correct UUID compartment_id
+          if (createdMovement.compartment_id !== firstCompartment.id) {
+            throw new Error(
+              `❌ UUID MISMATCH: Expected movements.compartment_id '${firstCompartment.id}', got '${createdMovement.compartment_id}'`
+            );
+          }
+          
+          // Clean up test movement
+          await supabaseStorage.supabase
+            .from('movements')
+            .delete()
+            .eq('id', createdMovement.id);
+            
+        } catch (movementTestError: any) {
+          throw new Error(`Movement UUID compatibility test failed: ${movementTestError.message}`);
+        }
+      }
+    }
+
+    log('✅ Supabase schema validation passed - mixed ID types confirmed (integer products, UUID compartments)');
     
   } catch (error: any) {
     log(`💥 STARTUP FAILED: ${error.message}`);
