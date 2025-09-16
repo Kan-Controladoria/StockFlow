@@ -1,19 +1,25 @@
 import fetch from "node-fetch";
 
-// 🔹 Endereços possíveis dos endpoints
-const BASE_URL = "https://stock-flow-controladoriasu.replit.app";
+// 🔹 Endereços dos endpoints (localhost para desenvolvimento)
+const BASE_URL = "http://localhost:5000";
 const ENDPOINTS = {
-  products: ["/api/products", "/products"],
-  movements: ["/api/movements", "/movements"],
+  products: ["/api/products"],
+  movements: ["/api/movements"],
+  compartments: ["/api/compartments"],
+  profiles: ["/api/profiles"],
 };
 
-// Produtos fictícios
+// User ID existente do sistema (obtido da API profiles)
+const USER_ID = "c49a8014-fb46-4ff5-b307-349aae4cb723";
+
+// Gerar códigos únicos para evitar conflitos de unique constraint
+const timestamp = Date.now();
 const produtos = [
-  { code: "P001", name: "Produto Teste 1", corredor: "1A1" },
-  { code: "P002", name: "Produto Teste 2", corredor: "2A1" },
-  { code: "P003", name: "Produto Teste 3", corredor: "3A1" },
-  { code: "P004", name: "Produto Teste 4", corredor: "4A1" },
-  { code: "P005", name: "Produto Teste 5", corredor: "5A1" },
+  { code: `P001_${timestamp}`, name: "Produto Teste 1", compartment_address: "1A1" },
+  { code: `P002_${timestamp}`, name: "Produto Teste 2", compartment_address: "1A2" },
+  { code: `P003_${timestamp}`, name: "Produto Teste 3", compartment_address: "1A3" },
+  { code: `P004_${timestamp}`, name: "Produto Teste 4", compartment_address: "1A4" },
+  { code: `P005_${timestamp}`, name: "Produto Teste 5", compartment_address: "1A5" },
 ];
 
 // Função auxiliar: tenta um endpoint, se falhar testa o próximo
@@ -40,19 +46,19 @@ async function runTest() {
   const resultados = [];
 
   for (let p of produtos) {
-    console.log(`\n🔹 Testando ${p.name} (${p.corredor})`);
+    console.log(`\n🔹 Testando ${p.name} (Compartimento: ${p.compartment_address})`);
 
-    // 1. Criar produto
+    // 1. Criar produto com schema correto
     const produtoCriado = await tryFetch(ENDPOINTS.products, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        barcode: p.code,
-        code: p.code,
-        name: p.name,
-        department: "bebidas",
-        category: "teste",
-        subcategory: "teste",
+        codigo_barras: p.code,
+        codigo_produto: p.code,
+        produto: p.name,
+        departamento: "bebidas",
+        categoria: "teste",
+        subcategoria: "teste",
       }),
     });
 
@@ -63,64 +69,74 @@ async function runTest() {
 
     console.log(`✅ Produto criado: ${p.name}`, produtoCriado);
 
-    const productId = produtoCriado.id || produtoCriado.product?.id;
+    const productId = produtoCriado.id;
     if (!productId) {
       console.log(`⚠️ ID não encontrado para ${p.name}`);
       continue;
     }
 
-    // 2. Entrada de 100 unidades
-    await tryFetch(ENDPOINTS.movements, {
+    // 2. Entrada de 100 unidades (usando endereço de compartimento)
+    const entradaResult = await tryFetch(ENDPOINTS.movements, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        user_id: USER_ID,
         product_id: productId,
-        compartment_id: p.corredor,
+        compartment_id: p.compartment_address, // Usa endereço que será convertido para BIGINT
         qty: 100,
-        type: "entrada",
+        tipo: "ENTRADA",
       }),
     });
-    console.log(`📦 Entrada registrada: 100 unidades em ${p.corredor}`);
+    
+    if (entradaResult) {
+      console.log(`📦 Entrada registrada: 100 unidades no compartimento ${p.compartment_address}`);
+    } else {
+      console.log(`❌ Falha na entrada de ${p.name}`);
+    }
 
-    // 3. Saída de 30 unidades
-    await tryFetch(ENDPOINTS.movements, {
+    // 3. Saída de 30 unidades (usando endereço de compartimento)
+    const saidaResult = await tryFetch(ENDPOINTS.movements, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        user_id: USER_ID,
         product_id: productId,
-        compartment_id: p.corredor,
+        compartment_id: p.compartment_address, // Usa endereço que será convertido para BIGINT
         qty: 30,
-        type: "saida",
+        tipo: "SAIDA",
       }),
     });
-    console.log(`🚚 Saída registrada: 30 unidades em ${p.corredor}`);
+    
+    if (saidaResult) {
+      console.log(`🚚 Saída registrada: 30 unidades do compartimento ${p.compartment_address}`);
+    } else {
+      console.log(`❌ Falha na saída de ${p.name}`);
+    }
 
-    // 4. Consulta saldo (tentando GET)
+    // 4. Consulta saldo via API de stock
     let saldoData = null;
-    for (let path of ENDPOINTS.movements) {
-      try {
-        const res = await fetch(`${BASE_URL}${path}/${productId}`);
-        if (res.ok) {
-          saldoData = await res.json();
-          break;
-        }
-      } catch (err) {
-        console.log(`❌ Erro ao consultar saldo em ${path}: ${err.message}`);
+    try {
+      const res = await fetch(`${BASE_URL}/api/stock?productId=${productId}`);
+      if (res.ok) {
+        saldoData = await res.json();
+        console.log(`📊 Saldo atual de ${p.name}:`, saldoData);
       }
+    } catch (err) {
+      console.log(`❌ Erro ao consultar saldo: ${err.message}`);
     }
 
     resultados.push({
       produto: p.name,
-      corredor: p.corredor,
+      compartment_address: p.compartment_address,
       saldoEsperado: 70,
-      saldoReal: saldoData?.saldo ?? "Não retornado",
+      saldoReal: saldoData?.quantity ?? "Não retornado",
     });
   }
 
   console.log("\n=== RELATÓRIO FINAL ===");
   resultados.forEach(r => {
     console.log(
-      `🛒 ${r.produto} | Corredor: ${r.corredor} | Esperado: ${r.saldoEsperado} | Real: ${r.saldoReal}`
+      `🛒 ${r.produto} | Compartimento: ${r.compartment_address} | Esperado: ${r.saldoEsperado} | Real: ${r.saldoReal}`
     );
   });
 
