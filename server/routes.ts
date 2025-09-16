@@ -11,6 +11,15 @@ import {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // SECURITY PROTECTION: Block all debug routes in production
+  app.use('/api/debug', (req, res, next) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    console.log(`🔍 [DEBUG MODE] Debug route accessed: ${req.path}`);
+    next();
+  });
+  
   // Debug route to expose Supabase connection information
   app.get("/api/debug/supabase", async (req, res) => {
     try {
@@ -51,14 +60,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Error fetching products for debug:', error.message);
       }
       
-      // Test direct connection to verify client works
+      // Test direct connection using PostgreSQL pool instead of Supabase client
       let connectionTest = 'failed';
       try {
-        const testResult = await supabaseStorage.supabase
-          .from('products')
-          .select('count')
-          .limit(1);
-        connectionTest = testResult.error ? `error: ${testResult.error.message}` : 'success';
+        const products = await supabaseStorage.getAllProducts();
+        connectionTest = products.length >= 0 ? 'success' : 'no_products';
       } catch (error: any) {
         connectionTest = `exception: ${error.message}`;
       }
@@ -83,17 +89,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // CRITICAL DEBUG ROUTES - Data Recovery Implementation
+  app.get("/api/debug/database-identity", async (req, res) => {
+    try {
+      console.log('🔍 [DEBUG ROUTE] Database identity verification requested...');
+      const identity = await supabaseStorage.verifyDatabaseIdentity();
+      res.json({
+        success: true,
+        ...identity,
+        critical_issues: {
+          compartment_3b7_missing: !identity.compartment_3b7_exists,
+          product_6_missing: !identity.product_6_exists,
+          data_loss_detected: identity.compartment_count < 5 || identity.product_count < 5
+        }
+      });
+    } catch (error: any) {
+      console.error('❌ Database identity verification failed:', error.message);
+      res.status(500).json({ 
+        success: false,
+        error: error.message,
+        stack: error.stack?.split('\n').slice(0, 5)
+      });
+    }
+  });
+
+  app.post("/api/debug/seed-critical-data", async (req, res) => {
+    try {
+      console.log('🌱 [DEBUG ROUTE] Critical data seeding requested...');
+      await supabaseStorage.seedMissingCriticalData();
+      
+      // Verify seeding worked
+      const verificationResult = await supabaseStorage.verifyDatabaseIdentity();
+      
+      res.json({
+        success: true,
+        message: 'Critical data seeded successfully',
+        verification: {
+          compartment_3b7_exists: verificationResult.compartment_3b7_exists,
+          compartment_3b7_data: verificationResult.compartment_3b7_data,
+          product_6_exists: verificationResult.product_6_exists,
+          product_6_data: verificationResult.product_6_data
+        }
+      });
+    } catch (error: any) {
+      console.error('❌ Critical data seeding failed:', error.message);
+      res.status(500).json({ 
+        success: false,
+        error: error.message,
+        stack: error.stack?.split('\n').slice(0, 5)
+      });
+    }
+  });
+
+  app.get("/api/debug/test-address-lookup/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      console.log(`🔍 [DEBUG ROUTE] Testing hardened address lookup for: ${address}`);
+      
+      const compartmentId = await supabaseStorage.getCompartmentIdByAddress(address);
+      
+      res.json({
+        success: true,
+        address: address,
+        compartment_id: compartmentId,
+        lookup_type: /^[0-9]+$/.test(address.trim()) ? 'numeric_id' : 'address_string'
+      });
+    } catch (error: any) {
+      console.error(`❌ Address lookup failed for ${req.params.address}:`, error.message);
+      res.status(500).json({ 
+        success: false,
+        address: req.params.address,
+        error: error.message,
+        stack: error.stack?.split('\n').slice(0, 5)
+      });
+    }
+  });
+
+  app.post("/api/debug/test-movement-creation", async (req, res) => {
+    try {
+      const { address = '3B7', productId = 6, tipo = 'ENTRADA', qty = 10 } = req.body;
+      console.log(`🔍 [DEBUG ROUTE] Testing movement creation for address ${address}, product ${productId}`);
+      
+      const movement = await supabaseStorage.createMovementByAddress(
+        address,
+        productId,
+        tipo,
+        qty
+      );
+      
+      // Get updated stock
+      const stock = await supabaseStorage.getProductStock(productId);
+      
+      res.json({
+        success: true,
+        movement_created: movement,
+        product_stock: stock,
+        test_parameters: { address, productId, tipo, qty }
+      });
+    } catch (error: any) {
+      console.error('❌ Movement creation test failed:', error.message);
+      res.status(500).json({ 
+        success: false,
+        error: error.message,
+        stack: error.stack?.split('\n').slice(0, 5)
+      });
+    }
+  });
+
   // Authentication/Profile routes
   app.get("/api/profiles", async (req, res) => {
     try {
-      const { data, error } = await supabaseStorage.supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw new Error(`Error fetching profiles: ${error.message}`);
-      
-      res.json(data || []);
+      const profiles = await supabaseStorage.getAllProfiles();
+      res.json(profiles);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -103,26 +210,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const profileId = req.params.id;
       
-      // UUID validation
-      if (typeof profileId !== 'string' || !profileId.trim()) {
-        return res.status(400).json({ error: "Invalid UUID profile ID" });
-      }
+      // UUID validation handled in storage layer
+      const profile = await supabaseStorage.getProfile(profileId);
       
-      const { data, error } = await supabaseStorage.supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', profileId)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') {
-        throw new Error(`Error fetching profile: ${error.message}`);
-      }
-      
-      if (!data) {
+      if (!profile) {
         return res.status(404).json({ error: "Profile not found" });
       }
       
-      res.json(data);
+      res.json(profile);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -143,26 +238,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid email format" });
       }
       
-      const profileData = {
+      const userData = {
         email: email.trim(),
-        full_name: full_name ? full_name.trim() : null
+        full_name: full_name ? full_name.trim() : ''
       };
       
-      const { data, error } = await supabaseStorage.supabase
-        .from('profiles')
-        .insert(profileData)
-        .select()
-        .single();
-      
-      if (error) {
-        if (error.code === '23505') { // Unique constraint violation
-          return res.status(409).json({ error: "Email already exists" });
-        }
-        throw new Error(`Error creating profile: ${error.message}`);
-      }
-      
-      res.status(201).json(data);
+      const profile = await supabaseStorage.createUser(userData);
+      res.status(201).json(profile);
     } catch (error: any) {
+      if (error.message.includes('unique constraint') || error.message.includes('duplicate key')) {
+        return res.status(409).json({ error: "Email already exists" });
+      }
       res.status(400).json({ error: error.message });
     }
   });
@@ -961,6 +1047,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get compartment ID: resolve address to UUID via database lookup
       const compartmentAddress = compartment_address || compartment_id;
       const finalCompartmentId = await supabaseStorage.getCompartmentIdByAddress(compartmentAddress.toString());
+      
+      console.log('🔧 [ROUTE DEBUG] Final compartment ID after lookup:', {
+        finalCompartmentId,
+        type: typeof finalCompartmentId,
+        isNumber: typeof finalCompartmentId === 'number',
+        isInteger: Number.isInteger(finalCompartmentId)
+      });
       
       // Create movement using the storage layer
       const movement = await supabaseStorage.createMovement({
