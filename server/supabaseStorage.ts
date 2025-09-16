@@ -73,7 +73,7 @@ export class SupabaseStorage {
       const { data, error } = await supabase
         .from('compartments')
         .select('id')
-        .eq('address', address)
+        .eq('codigo_endereco', address)
         .single();
       
       if (error && error.code !== 'PGRST116') {
@@ -84,10 +84,10 @@ export class SupabaseStorage {
         // If compartment doesn't exist, list available addresses for debugging
         const { data: allCompartments, error: listError } = await supabase
           .from('compartments')
-          .select('address')
-          .order('address');
+          .select('codigo_endereco')
+          .order('codigo_endereco');
         
-        const availableAddresses = allCompartments?.map(c => c.address).join(', ') || 'none';
+        const availableAddresses = allCompartments?.map(c => c.codigo_endereco).join(', ') || 'none';
         console.error(`❌ Address not found: ${address}`);
         console.error(`📋 Available addresses: ${availableAddresses}`);
         throw new Error(`Compartment not found for address: ${address}. Available: ${availableAddresses}`);
@@ -115,16 +115,21 @@ export class SupabaseStorage {
   
   // Compartment methods
   async getAllCompartments(): Promise<any[]> {
-    // Select all fields including the real address column
+    // Select all fields including the real codigo_endereco column
     const { data, error } = await supabase
       .from('compartments')
-      .select('id, address, corredor, linha, coluna')
+      .select('id, codigo_endereco, corredor, linha, coluna')
       .order('id');
     
     if (error) throw new Error(`Error fetching compartments: ${error.message}`);
     
-    // Return data with real address field from database
-    return data || [];
+    // Map codigo_endereco to address for frontend compatibility
+    const compartments = (data || []).map(comp => ({
+      ...comp,
+      address: comp.codigo_endereco  // Provide backward compatibility
+    }));
+    
+    return compartments;
   }
 
   // Product methods

@@ -457,7 +457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const compartmentData = {
-        address: address.trim(),
+        codigo_endereco: address.trim(),
         corredor,
         linha: linha.trim(),
         coluna
