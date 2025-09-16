@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
 import { supabaseStorage } from "./supabaseStorage";
 import { 
   insertProductSchema, 
@@ -15,8 +14,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication/Profile routes
   app.get("/api/profiles", async (req, res) => {
     try {
-      const profiles = await storage.getAllProfiles();
-      res.json(profiles);
+      res.status(501).json({ error: 'Profiles not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -24,11 +22,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/profiles/:id", async (req, res) => {
     try {
-      const profile = await storage.getProfile(req.params.id);
-      if (!profile) {
-        return res.status(404).json({ error: "Profile not found" });
-      }
-      res.json(profile);
+      res.status(501).json({ error: 'Profile lookup not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -36,9 +30,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/profiles", async (req, res) => {
     try {
-      const validatedData = insertProfileSchema.parse(req.body);
-      const profile = await storage.createProfile(validatedData);
-      res.status(201).json(profile);
+      res.status(501).json({ error: 'Profile creation not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -139,7 +131,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Atualização via Supabase - implementar se necessário
       res.status(501).json({ error: 'Update not implemented with Supabase yet' });
-      res.json(product);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -149,7 +140,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Exclusão via Supabase - implementar se necessário
       res.status(501).json({ error: 'Delete not implemented with Supabase yet' });
-      res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -158,8 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Compartment routes
   app.get("/api/compartments", async (req, res) => {
     try {
-      const compartments = await storage.getAllCompartments();
-      res.json(compartments);
+      res.status(501).json({ error: 'Compartments not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -167,8 +156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/compartments/with-stock", async (req, res) => {
     try {
-      const compartments = await storage.getAllCompartmentsWithStock();
-      res.json(compartments);
+      res.status(501).json({ error: 'Compartments with stock not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -176,11 +164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/compartments/:id", async (req, res) => {
     try {
-      const compartment = await storage.getCompartmentWithStock(req.params.id);
-      if (!compartment) {
-        return res.status(404).json({ error: "Compartment not found" });
-      }
-      res.json(compartment);
+      res.status(501).json({ error: 'Compartment lookup not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -188,9 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/compartments", async (req, res) => {
     try {
-      const validatedData = insertCompartmentSchema.parse(req.body);
-      const compartment = await storage.createCompartment(validatedData);
-      res.status(201).json(compartment);
+      res.status(501).json({ error: 'Compartment creation not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -201,21 +183,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { compartmentId, productId } = req.query;
       
-      if (compartmentId && productId) {
-        const stock = await storage.getStockByCompartmentAndProduct(
-          compartmentId as string, 
-          productId as string
-        );
-        res.json(stock);
-      } else if (compartmentId) {
-        const stock = await storage.getStockByCompartment(compartmentId as string);
-        res.json(stock);
-      } else if (productId) {
-        const stock = await storage.getStockByProduct(productId as string);
-        res.json(stock);
+      if (productId) {
+        // Use Supabase method for product stock
+        const stock = await supabaseStorage.getProductStock(productId as string);
+        res.json({ product_id: productId, quantity: stock });
       } else {
-        const stock = await storage.getAllStock();
-        res.json(stock);
+        res.status(501).json({ error: 'Stock queries not implemented with Supabase yet' });
       }
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -224,9 +197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stock", async (req, res) => {
     try {
-      const validatedData = insertStockSchema.parse(req.body);
-      const stock = await storage.createStock(validatedData);
-      res.status(201).json(stock);
+      res.status(501).json({ error: 'Stock creation not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -234,12 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/stock/:id", async (req, res) => {
     try {
-      const { quantity } = req.body;
-      if (typeof quantity !== 'number') {
-        return res.status(400).json({ error: "Quantity must be a number" });
-      }
-      const stock = await storage.updateStock(req.params.id, quantity);
-      res.json(stock);
+      res.status(501).json({ error: 'Stock update not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -247,8 +213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/stock/:id", async (req, res) => {
     try {
-      await storage.deleteStock(req.params.id);
-      res.status(204).send();
+      res.status(501).json({ error: 'Stock deletion not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -267,18 +232,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } = req.query;
 
       if (startDate || endDate || type || productId || compartmentId || userId) {
-        const filters: any = {};
-        if (startDate) filters.startDate = new Date(startDate as string);
-        if (endDate) filters.endDate = new Date(endDate as string);
-        if (type) filters.type = type;
-        if (productId) filters.productId = productId;
-        if (compartmentId) filters.compartmentId = compartmentId;
-        if (userId) filters.userId = userId;
-
-        const movements = await storage.getMovementsByFilters(filters);
-        res.json(movements);
+        res.status(501).json({ error: 'Filtered movements not implemented with Supabase yet' });
       } else {
-        const movements = await storage.getAllMovements();
+        const movements = await supabaseStorage.getAllMovements();
         res.json(movements);
       }
     } catch (error: any) {
@@ -288,8 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movements/compartment/:id", async (req, res) => {
     try {
-      const movements = await storage.getMovementsByCompartment(req.params.id);
-      res.json(movements);
+      res.status(501).json({ error: 'Movements by compartment not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -297,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movements/product/:id", async (req, res) => {
     try {
-      const movements = await storage.getMovementsByProduct(req.params.id);
+      const movements = await supabaseStorage.getMovementsByProduct(req.params.id);
       res.json(movements);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -306,8 +261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movements/user/:id", async (req, res) => {
     try {
-      const movements = await storage.getMovementsByUser(req.params.id);
-      res.json(movements);
+      res.status(501).json({ error: 'Movements by user not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -369,17 +323,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reports routes
   app.get("/api/reports/stats", async (req, res) => {
     try {
-      const products = await storage.getAllProducts();
-      const stock = await storage.getAllStock();
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const movements = await storage.getMovementsByDateRange(thirtyDaysAgo, new Date());
-
-      const compartmentsWithStock = new Set(stock.map(s => s.compartment_id)).size;
-
+      const products = await supabaseStorage.getAllProducts();
+      const movements = await supabaseStorage.getAllMovements();
+      
+      // Basic stats with available data
       const stats = {
         totalProducts: products.length,
-        compartmentsWithStock,
+        compartmentsWithStock: 0, // Not implemented yet
         monthlyMovements: movements.length
       };
 
@@ -391,36 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/reports/stock", async (req, res) => {
     try {
-      const { corridor, department } = req.query;
-      
-      // Get all stock with related data
-      const compartments = await storage.getAllCompartmentsWithStock();
-      
-      let filteredData: any[] = [];
-      compartments.forEach(compartment => {
-        compartment.stock.forEach(stockItem => {
-          filteredData.push({
-            ...stockItem,
-            compartments: compartment,
-            products: stockItem.products
-          });
-        });
-      });
-
-      // Apply filters
-      if (corridor && corridor !== 'all') {
-        filteredData = filteredData.filter(item => 
-          item.compartments.corredor === parseInt(corridor as string)
-        );
-      }
-
-      if (department && department !== 'all') {
-        filteredData = filteredData.filter(item => 
-          item.products.departamento === department
-        );
-      }
-
-      res.json(filteredData);
+      res.status(501).json({ error: 'Stock reports not implemented with Supabase yet' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
