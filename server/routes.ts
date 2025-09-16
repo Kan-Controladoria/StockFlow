@@ -347,6 +347,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add missing /api/db-compartments route that frontend calls
+  app.get("/api/db-compartments", async (req, res) => {
+    try {
+      // Direct database query to get compartments with codigo_endereco
+      const { data, error } = await supabaseStorage.supabase
+        .from('compartments')
+        .select('id, codigo_endereco, corredor, linha, coluna')
+        .order('id');
+      
+      if (error) throw new Error(`Error fetching db compartments: ${error.message}`);
+      
+      // Map codigo_endereco to address for frontend compatibility
+      const compartments = (data || []).map(comp => ({
+        ...comp,
+        address: comp.codigo_endereco  // Frontend expects 'address' field
+      }));
+      
+      res.json(compartments);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/api/compartments/with-stock", async (req, res) => {
     try {
       // Get compartments without problematic address field, order by id

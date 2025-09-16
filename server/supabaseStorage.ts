@@ -195,7 +195,7 @@ export class SupabaseStorage {
     const { data, error } = await supabase
       .schema('public')
       .from('movements')
-      .select('id, user_id, product_id, compartment_id, tipo, qty')
+      .select('id, user_id, product_id, compartment_id, tipo, qty, timestamp')
       .order('id', { ascending: false });
     
     if (error) throw new Error(`Error fetching movements: ${error.message}`);
@@ -278,7 +278,7 @@ export class SupabaseStorage {
     const { data, error } = await supabase
       .schema('public')
       .from('movements')
-      .select('id, user_id, product_id, compartment_id, tipo, qty')
+      .select('id, user_id, product_id, compartment_id, tipo, qty, timestamp')
       .eq('product_id', productId)
       .order('id', { ascending: false });
     
