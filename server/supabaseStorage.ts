@@ -65,28 +65,41 @@ export class SupabaseStorage {
     return Number.isInteger(id) && id > 0;
   }
   
-  // Simple address to BIGINT compartment ID mapping
+  // Dynamic address to BIGINT compartment ID lookup using database
   async getCompartmentIdByAddress(address: string): Promise<number> {
     console.log(`🔍 Looking up compartment BIGINT for address: ${address}`);
     
-    // BIGINT mapping for compartments.id BIGINT schema
-    const addressMapping: Record<string, number> = {
-      '1A1': 1,
-      '1A2': 2, 
-      '1A3': 3,
-      '1A4': 9,
-      '1A5': 10
-    };
-    
-    if (addressMapping[address]) {
-      const compartmentId = addressMapping[address];
-      console.log(`✅ Found compartment BIGINT: ${compartmentId}`);
-      return compartmentId;
+    try {
+      const { data, error } = await supabase
+        .from('compartments')
+        .select('id')
+        .eq('address', address)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw new Error(`Database error: ${error.message}`);
+      }
+      
+      if (!data) {
+        // If compartment doesn't exist, list available addresses for debugging
+        const { data: allCompartments, error: listError } = await supabase
+          .from('compartments')
+          .select('address')
+          .order('address');
+        
+        const availableAddresses = allCompartments?.map(c => c.address).join(', ') || 'none';
+        console.error(`❌ Address not found: ${address}`);
+        console.error(`📋 Available addresses: ${availableAddresses}`);
+        throw new Error(`Compartment not found for address: ${address}. Available: ${availableAddresses}`);
+      }
+      
+      console.log(`✅ Found compartment BIGINT: ${data.id}`);
+      return data.id;
+      
+    } catch (error: any) {
+      console.error(`❌ Error looking up compartment: ${error.message}`);
+      throw error;
     }
-    
-    console.error(`❌ Address not found: ${address}`);
-    console.error(`📋 Available addresses: ${Object.keys(addressMapping).join(', ')}`);
-    throw new Error(`Compartment not found for address: ${address}`);
   }
   
   // Database schema validation
@@ -102,21 +115,16 @@ export class SupabaseStorage {
   
   // Compartment methods
   async getAllCompartments(): Promise<any[]> {
-    // Use minimal select to avoid schema issues
+    // Select all fields including the real address column
     const { data, error } = await supabase
       .from('compartments')
-      .select('id, corredor, linha, coluna')
+      .select('id, address, corredor, linha, coluna')
       .order('id');
     
     if (error) throw new Error(`Error fetching compartments: ${error.message}`);
     
-    // Add synthetic address field using corredor+linha+coluna
-    const dataWithAddress = (data || []).map(compartment => ({
-      ...compartment,
-      address: `${compartment.corredor}${compartment.linha}${compartment.coluna}`
-    }));
-    
-    return dataWithAddress;
+    // Return data with real address field from database
+    return data || [];
   }
 
   // Product methods
