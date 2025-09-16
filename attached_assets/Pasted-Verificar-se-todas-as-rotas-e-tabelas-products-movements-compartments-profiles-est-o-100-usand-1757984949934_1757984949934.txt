@@ -1,0 +1,66 @@
+Verificar se todas as rotas e tabelas (products, movements, compartments, profiles) estão 100% usando Supabase.
+
+Corrigir automaticamente qualquer rota que ainda use MemStorage ou tabelas antigas (produtos, movimentos, usuarios).
+
+Criar 5 produtos fictícios no Supabase.
+
+Alocar cada produto em um compartimento distinto (1A1, 2A1, 3A1, 4A1, 5A1) convertendo para UUID do compartments.
+
+Registrar movimentações: entrada de 100 unidades + saída de 30 unidades em cada produto.
+
+Consultar saldos finais diretamente da tabela movements.
+
+Gerar relatório consolidado (esperado = 70 unidades por produto).
+
+Detectar inconsistências (ex.: bigint vs UUID, colunas ausentes, RLS bloqueando) e corrigir automaticamente antes de prosseguir.
+
+Rodar novamente até confirmar que tudo está consistente.
+
+📋 Prompt para colar no Replit
+Quero que executes um **teste automatizado completo e de correção** da integração com o Supabase.  
+
+🔍 OBJETIVO: Garantir que toda a aplicação (rotas, storage e tabelas) use exclusivamente o Supabase com persistência real.  
+
+### ETAPAS DO TESTE:
+
+1. **Verificação de schema**
+   - Verifica as tabelas `products`, `movements`, `compartments` e `profiles` no schema `public`.
+   - Confirma que todas usam `UUID` como chave primária.
+   - Se encontrar tabelas antigas (`produtos`, `movimentos`, `usuarios`) ou rotas ainda usando MemStorage, corrige imediatamente para usar apenas as tabelas novas.
+
+2. **Criação de produtos**
+   - Cria 5 produtos fictícios no Supabase (`Produto Auto 1` ... `Produto Auto 5`).
+   - Cada produto deve ser criado em `products` com código único.
+
+3. **Mapeamento de compartimentos**
+   - Converte automaticamente os endereços `"1A1"`, `"2A1"`, `"3A1"`, `"4A1"`, `"5A1"` para seus respectivos UUIDs em `compartments`.
+
+4. **Movimentações**
+   - Para cada produto:
+     - Registra **entrada de 100 unidades**.
+     - Registra **saída de 30 unidades**.
+   - Usa `movements` com os campos corretos (`product_id`, `compartment_id`, `user_id`, `qty`, `type`).
+
+5. **Consulta de saldos**
+   - Consulta a tabela `movements` para cada produto.
+   - Calcula o saldo final esperado = `70`.
+   - Se houver erro de schema (ex.: bigint vs UUID), corrige automaticamente e repete a operação.
+
+6. **Relatório consolidado**
+   - Exibe tabela final com:  
+     Produto | Compartimento | Entrada | Saída | Saldo Esperado | Saldo Real | Status  
+   - Marca ✅ se saldo = 70, ❌ se houver divergência.
+
+7. **Correções automáticas**
+   - Se detectar:
+     - Rotas usando MemStorage → Corrigir para SupabaseStorage.
+     - Conflitos de schema → Corrigir para usar `public.products` e `public.movements`.
+     - Erros de tipos (`bigint` vs `UUID`) → Ajustar colunas e queries.
+     - RLS bloqueando → Usar `SUPABASE_SERVICE_ROLE_KEY` automaticamente.
+   - Após corrigir, repetir todo o fluxo até os resultados baterem.
+
+---
+
+🎯 **Condição de sucesso:**  
+Todos os 5 produtos aparecem no Supabase, cada um alocado no compartimento correto, com saldo final = 70.  
+Gerar relatório final comprovando consistência total do sistema.
