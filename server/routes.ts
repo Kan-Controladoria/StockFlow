@@ -116,10 +116,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", async (req, res) => {
     try {
-      // Map frontend field names to Supabase schema
+      // Map frontend field names to Supabase products table schema
       const productData = {
-        produto: req.body.produto || req.body.nome,
-        codigo_produto: req.body.codigo_produto || req.body.codigo,
+        produto: req.body.produto || req.body.nome,                           // 'produto' na tabela products
+        codigo_produto: req.body.codigo_produto || req.body.codigo,          // 'codigo_produto' na tabela products
         departamento: req.body.departamento,
         categoria: req.body.categoria,
         subcategoria: req.body.subcategoria
@@ -315,16 +315,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Support both 'tipo' and 'type' fields
       const { user_id, product_id, code, compartment_id, tipo, type, qty, quantidade } = req.body;
       
-      const finalCode = code || compartment_id;
+      const finalAddress = code || compartment_id;
       const finalTipo = tipo || (type === 'entrada' ? 'ENTRADA' : type === 'saida' ? 'SAIDA' : type?.toUpperCase());
       const finalQuantity = qty || quantidade;
       
-      // Use Supabase for movements - no need for compartment mapping
+      // Convert compartment address to UUID
+      const compartmentUuid = await supabaseStorage.getCompartmentIdByAddress(finalAddress);
+      if (!compartmentUuid) {
+        return res.status(400).json({ error: `Compartment with address '${finalAddress}' not found` });
+      }
+      
+      // Get or create default user for movements (since user_id is required)
+      const defaultUser = await supabaseStorage.getOrCreateDefaultUser();
+      
+      // Map fields to Supabase movements table structure
       const movementData = {
-        product_id: product_id,
-        compartment_id: finalCode,
+        user_id: user_id || defaultUser.id,      // Required field in movements table
+        product_id: product_id,                  // 'product_id' na tabela movements
+        compartment_id: compartmentUuid,         // UUID do compartimento
         tipo: finalTipo,
-        qty: finalQuantity
+        qty: finalQuantity                       // 'qty' na tabela movements
       };
       
       const movement = await supabaseStorage.createMovement(movementData);
