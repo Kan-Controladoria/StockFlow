@@ -44,7 +44,8 @@ export interface SupabaseMovement {
   compartment_id: number; // BIGINT (references compartments.id)
   tipo: 'ENTRADA' | 'SAIDA';
   qty: number;           // tabela movements usa 'qty'
-  timestamp: string;     // tabela movements usa 'timestamp' ao invés de 'created_at'
+  ts: string;            // tabela movements usa 'ts' ao invés de 'timestamp'
+  obs?: string;          // optional obs field
 }
 
 export interface SupabaseUser {
@@ -161,13 +162,13 @@ export class SupabaseStorage {
       .schema('public')
       .from('movements')
       .select('*')
-      .order('timestamp', { ascending: false });
+      .order('ts', { ascending: false });
     
     if (error) throw new Error(`Error fetching movements: ${error.message}`);
     return data || [];
   }
 
-  async createMovement(movement: Omit<SupabaseMovement, 'id' | 'timestamp'>): Promise<SupabaseMovement> {
+  async createMovement(movement: Omit<SupabaseMovement, 'id' | 'ts' | 'obs'>): Promise<SupabaseMovement> {
     console.log('🗺 Movement creation with BIGINT IDs:', {
       user_id: movement.user_id,
       user_id_type: typeof movement.user_id,
@@ -245,7 +246,7 @@ export class SupabaseStorage {
       .from('movements')
       .select('*')
       .eq('product_id', productId)
-      .order('timestamp', { ascending: false });
+      .order('ts', { ascending: false });
     
     if (error) throw new Error(`Error fetching movements by product: ${error.message}`);
     return data || [];
