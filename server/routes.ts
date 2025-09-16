@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { supabaseStorage } from "./supabaseStorage";
 import { 
   insertProductSchema, 
   insertCompartmentSchema, 
@@ -50,9 +51,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let products;
       
       if (search && typeof search === 'string') {
-        products = await storage.searchProducts(search);
+        products = await supabaseStorage.searchProducts(search);
       } else {
-        products = await storage.getAllProducts();
+        products = await supabaseStorage.getAllProducts();
       }
       
       res.json(products);
@@ -63,7 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/products/search/:code", async (req, res) => {
     try {
-      const product = await storage.findProductByCode(req.params.code);
+      const product = await supabaseStorage.findProductByCode(req.params.code);
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
@@ -115,8 +116,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", async (req, res) => {
     try {
-      const validatedData = insertProductSchema.parse(req.body);
-      const product = await storage.createProduct(validatedData);
+      // Map frontend field names to Supabase schema
+      const productData = {
+        produto: req.body.produto || req.body.nome,
+        codigo_produto: req.body.codigo_produto || req.body.codigo,
+        departamento: req.body.departamento,
+        categoria: req.body.categoria,
+        subcategoria: req.body.subcategoria
+      };
+      
+      const product = await supabaseStorage.createProduct(productData);
       res.status(201).json(product);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -304,81 +313,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Support both new format (code) and old format (compartment_id)
       // Support both 'tipo' and 'type' fields
-      const { user_id, product_id, code, compartment_id, tipo, type, qty } = req.body;
+      const { user_id, product_id, code, compartment_id, tipo, type, qty, quantidade } = req.body;
       
       const finalCode = code || compartment_id;
       const finalTipo = tipo || (type === 'entrada' ? 'ENTRADA' : type === 'saida' ? 'SAIDA' : type?.toUpperCase());
+      const finalQuantity = qty || quantidade;
       
-      // Default user_id for external API calls (create a default user if needed)
-      let finalUserId = user_id;
-      if (!finalUserId) {
-        // Try to get first available user or create default one
-        const profiles = await storage.getAllProfiles();
-        if (profiles.length > 0) {
-          finalUserId = profiles[0].id;
-        } else {
-          // Create default user for API testing
-          const defaultUser = await storage.createProfile({
-            email: 'api@teste.com',
-            full_name: 'API Test User'
-          });
-          finalUserId = defaultUser.id;
-        }
-      }
-      
-      // Buscar o UUID real do compartimento pelo código
-      const compartment = await storage.getCompartmentByAddress(finalCode);
-      if (!compartment) {
-        return res.status(400).json({ error: "Compartimento não encontrado" });
-      }
-      
-      // Criar dados do movimento com UUID real
+      // Use Supabase for movements - no need for compartment mapping
       const movementData = {
-        user_id: finalUserId,
-        product_id, 
-        compartment_id: compartment.id, // UUID real
+        product_id: product_id,
+        compartment_id: finalCode,
         tipo: finalTipo,
-        qty
+        qty: finalQuantity
       };
       
-      const validatedData = insertMovementSchema.parse(movementData);
-      
-      // Handle stock update logic
-      const existingStock = await storage.getStockByCompartmentAndProduct(
-        validatedData.compartment_id, 
-        validatedData.product_id
-      );
-
-      if (existingStock) {
-        // Update existing stock
-        const newQuantity = validatedData.tipo === 'ENTRADA' 
-          ? existingStock.quantity + validatedData.qty
-          : existingStock.quantity - validatedData.qty;
-
-        if (newQuantity < 0) {
-          return res.status(400).json({ error: 'Quantidade insuficiente em estoque' });
-        }
-
-        if (newQuantity === 0) {
-          await storage.deleteStock(existingStock.id);
-        } else {
-          await storage.updateStock(existingStock.id, newQuantity);
-        }
-      } else {
-        // Create new stock entry (only for ENTRADA)
-        if (validatedData.tipo === 'ENTRADA') {
-          await storage.createStock({
-            compartment_id: validatedData.compartment_id,
-            product_id: validatedData.product_id,
-            quantity: validatedData.qty,
-          });
-        } else {
-          return res.status(400).json({ error: 'Produto não encontrado no compartimento' });
-        }
-      }
-
-      // Create movement record
-      const movement = await storage.createMovement(validatedData);
+      const movement = await supabaseStorage.createMovement(movementData);
       res.status(201).json(movement);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -390,14 +339,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { productId } = req.params;
       
-      // Get current stock for all compartments of this product
-      const stock = await storage.getStockByProduct(productId);
-      const totalStock = stock.reduce((sum, s) => sum + s.quantity, 0);
+      // Get product stock from Supabase movements
+      const totalStock = await supabaseStorage.getProductStock(productId);
       
       res.json({
         product_id: productId,
         saldo: totalStock,
-        compartments: stock
+        compartments: []
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
