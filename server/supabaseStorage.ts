@@ -27,7 +27,8 @@ try {
 }
 
 export interface SupabaseProduct {
-  id: string;
+  id: number;
+  codigo_barras: string;  // Required field in serial ID schema
   produto: string;        // tabela products usa 'produto'
   codigo_produto: string; // tabela products usa 'codigo_produto'
   departamento: string;
@@ -37,25 +38,27 @@ export interface SupabaseProduct {
 }
 
 export interface SupabaseMovement {
-  id: string;
-  product_id: string;    // tabela movements usa 'product_id'
-  compartment_id: string; // tabela movements usa 'compartment_id'
+  id: number;
+  product_id: number;    // tabela movements usa 'product_id'
+  compartment_id: number; // tabela movements usa 'compartment_id'
   tipo: 'ENTRADA' | 'SAIDA';
   qty: number;           // tabela movements usa 'qty'
   timestamp: string;     // tabela movements usa 'timestamp' ao invés de 'created_at'
 }
 
 export interface SupabaseUser {
-  id: string;
+  id: number;
   email: string;
   nome: string;
 }
 
 export class SupabaseStorage {
+  // Expose supabase client for startup validation
+  public readonly supabase = supabase;
   // Product methods
   async getAllProducts(): Promise<SupabaseProduct[]> {
     const { data, error } = await supabase
-      .from('products')  // usando tabela correta com UUIDs
+      .from('products')  // usando tabela correta com serial IDs
       .select('*')
       .order('created_at', { ascending: false });
     
@@ -63,9 +66,9 @@ export class SupabaseStorage {
     return data || [];
   }
 
-  async getProduct(id: string): Promise<SupabaseProduct | null> {
+  async getProduct(id: number): Promise<SupabaseProduct | null> {
     const { data, error } = await supabase
-      .from('products')  // usando tabela correta com UUIDs
+      .from('products')  // usando tabela correta com serial IDs
       .select('*')
       .eq('id', id)
       .single();
@@ -78,7 +81,7 @@ export class SupabaseStorage {
 
   async findProductByCode(codigo: string): Promise<SupabaseProduct | null> {
     const { data, error } = await supabase
-      .from('products')  // usando tabela correta com UUIDs
+      .from('products')  // usando tabela correta com serial IDs
       .select('*')
       .eq('codigo_produto', codigo)  // campo 'codigo_produto' na tabela products
       .single();
@@ -91,7 +94,7 @@ export class SupabaseStorage {
 
   async createProduct(product: Omit<SupabaseProduct, 'id' | 'created_at'>): Promise<SupabaseProduct> {
     const { data, error } = await supabase
-      .from('products')  // usando tabela correta com UUIDs
+      .from('products')  // usando tabela correta com serial IDs
       .insert(product)
       .select()
       .single();
@@ -102,7 +105,7 @@ export class SupabaseStorage {
 
   async searchProducts(term: string): Promise<SupabaseProduct[]> {
     const { data, error } = await supabase
-      .from('products')  // usando tabela correta com UUIDs
+      .from('products')  // usando tabela correta com serial IDs
       .select('*')
       .or(`produto.ilike.%${term}%,codigo_produto.ilike.%${term}%`);  // campos da tabela products
     
@@ -114,7 +117,7 @@ export class SupabaseStorage {
   async getAllMovements(): Promise<SupabaseMovement[]> {
     const { data, error } = await supabase
       .schema('public')
-      .from('movements')  // usando tabela correta com UUIDs
+      .from('movements')  // usando tabela correta com serial IDs
       .select('*')
       .order('timestamp', { ascending: false });  // campo 'timestamp' na tabela movements
     
@@ -125,7 +128,7 @@ export class SupabaseStorage {
   async createMovement(movement: Omit<SupabaseMovement, 'id' | 'timestamp'>): Promise<SupabaseMovement> {
     const { data, error } = await supabase
       .schema('public')
-      .from('movements')  // usando tabela correta com UUIDs
+      .from('movements')  // usando tabela correta com serial IDs
       .insert(movement)
       .select()
       .single();
@@ -134,10 +137,10 @@ export class SupabaseStorage {
     return data;
   }
 
-  async getMovementsByProduct(productId: string): Promise<SupabaseMovement[]> {
+  async getMovementsByProduct(productId: number): Promise<SupabaseMovement[]> {
     const { data, error } = await supabase
       .schema('public')
-      .from('movements')  // usando tabela correta com UUIDs
+      .from('movements')  // usando tabela correta com serial IDs
       .select('*')
       .eq('product_id', productId)  // campo 'product_id' da tabela movements
       .order('timestamp', { ascending: false });  // campo 'timestamp' na tabela movements
@@ -146,7 +149,7 @@ export class SupabaseStorage {
     return data || [];
   }
 
-  async getProductStock(productId: string): Promise<number> {
+  async getProductStock(productId: number): Promise<number> {
     const movements = await this.getMovementsByProduct(productId);
     
     let stock = 0;
@@ -176,7 +179,7 @@ export class SupabaseStorage {
   async getOrCreateDefaultUser(): Promise<SupabaseUser> {
     // Hardcode default user to bypass schema conflicts
     const defaultUser: SupabaseUser = {
-      id: 'c29b5eb1-c1c9-41af-a5f2-6c68b3d7ab67',
+      id: 1,
       email: 'api@teste.com',
       nome: 'API Test User'
     };
@@ -185,14 +188,14 @@ export class SupabaseStorage {
   }
 
   // Helper method to get compartment ID by address
-  async getCompartmentIdByAddress(address: string): Promise<string | null> {
+  async getCompartmentIdByAddress(address: string): Promise<number | null> {
     // Early return with hardcode to bypass schema conflicts
-    const compartmentMap: { [key: string]: string } = {
-      '1A1': '4e3f902d-4b51-4362-bcd8-2fb69412088f',
-      '2A1': 'eb305eb4-8dde-44fc-a18f-09efc11d68af', 
-      '3A1': 'f314d8c1-dede-40f6-be60-504135ccceae',
-      '4A1': '3f8a9f5c-ee73-4de7-9a2d-1b6c4e5f8a9b',
-      '5A1': '7d2f4b8e-9c5a-4d2f-8e7b-3a1c5f9d2e4b'
+    const compartmentMap: { [key: string]: number } = {
+      '1A1': 1,
+      '2A1': 2, 
+      '3A1': 3,
+      '4A1': 4,
+      '5A1': 5
     };
     
     if (compartmentMap[address]) {

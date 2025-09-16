@@ -99,7 +99,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/products/:id", async (req, res) => {
     try {
-      const product = await supabaseStorage.getProduct(req.params.id);
+      const productId = parseInt(req.params.id, 10);
+      if (isNaN(productId)) {
+        return res.status(400).json({ error: "Invalid product ID" });
+      }
+      const product = await supabaseStorage.getProduct(productId);
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
@@ -113,6 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Map frontend field names to Supabase products table schema
       const productData = {
+        codigo_barras: req.body.codigo_barras || req.body.codigo_produto || req.body.codigo || 'DEFAULT_BARCODE', // Required field
         produto: req.body.produto || req.body.nome,                           // 'produto' na tabela products
         codigo_produto: req.body.codigo_produto || req.body.codigo,          // 'codigo_produto' na tabela products
         departamento: req.body.departamento,
@@ -185,7 +190,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (productId) {
         // Use Supabase method for product stock
-        const stock = await supabaseStorage.getProductStock(productId as string);
+        const productIdNum = parseInt(productId as string, 10);
+        if (isNaN(productIdNum)) {
+          return res.status(400).json({ error: "Invalid product ID" });
+        }
+        const stock = await supabaseStorage.getProductStock(productIdNum);
         res.json({ product_id: productId, quantity: stock });
       } else {
         res.status(501).json({ error: 'Stock queries not implemented with Supabase yet' });
@@ -252,7 +261,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movements/product/:id", async (req, res) => {
     try {
-      const movements = await supabaseStorage.getMovementsByProduct(req.params.id);
+      const productId = parseInt(req.params.id, 10);
+      if (isNaN(productId)) {
+        return res.status(400).json({ error: "Invalid product ID" });
+      }
+      const movements = await supabaseStorage.getMovementsByProduct(productId);
       res.json(movements);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -306,9 +319,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/movements/:productId", async (req, res) => {
     try {
       const { productId } = req.params;
+      const productIdNum = parseInt(productId, 10);
+      if (isNaN(productIdNum)) {
+        return res.status(400).json({ error: "Invalid product ID" });
+      }
       
       // Get product stock from Supabase movements
-      const totalStock = await supabaseStorage.getProductStock(productId);
+      const totalStock = await supabaseStorage.getProductStock(productIdNum);
       
       res.json({
         product_id: productId,
