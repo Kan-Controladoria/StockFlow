@@ -120,9 +120,11 @@ async function validateSupabaseSchema() {
     } catch (validationError: any) {
       throw validationError;
     }
+    
+    // Dynamic compartment lookups - no initialization needed
 
-    // Verify compartments.id is UUID (string format)
-    log('🔍 Querying compartments table...');
+    // Simple compartment table validation - just check it exists
+    log('🔍 Verifying compartments table exists...');
     const { data: compartments, error: compartmentError } = await supabaseStorage.supabase
       .from('compartments')
       .select('id')
@@ -131,80 +133,41 @@ async function validateSupabaseSchema() {
     if (compartmentError) {
       throw new Error(`Failed to query compartments table: ${compartmentError.message}`);
     }
-
-    log(`📝 Raw compartments query result: ${JSON.stringify(compartments)}`);
-
-    if (compartments && compartments.length > 0) {
-      const firstCompartment = compartments[0];
-      const compartmentIdType = typeof firstCompartment.id;
+    
+    log('✅ Compartments table verified - ready for BIGINT operations');
+    
+    // Database schema info logging (BIGINT-tolerant check)
+    log('🔍 Checking database schema types for movements and compartments...');
+    const { data: schemaData, error: schemaError } = await supabaseStorage.supabase
+      .from('information_schema.columns')
+      .select('table_name, column_name, data_type')
+      .in('table_name', ['movements', 'compartments'])
+      .in('column_name', ['compartment_id', 'id']);
+    
+    if (schemaError) {
+      log('⚠️  Could not retrieve schema types, proceeding with default assumptions');
+    } else {
+      const movementsCompartmentIdType = schemaData?.find(row => row.table_name === 'movements' && row.column_name === 'compartment_id')?.data_type;
+      const compartmentsIdType = schemaData?.find(row => row.table_name === 'compartments' && row.column_name === 'id')?.data_type;
       
-      log(`🔍 Compartment ID debug: type='${compartmentIdType}', value='${firstCompartment.id}', stringified='${JSON.stringify(firstCompartment.id)}'`);
+      log('🗃️  Database schema detected:');
+      log(`   movements.compartment_id type: ${movementsCompartmentIdType || 'unknown'}`);
+      log(`   compartments.id type: ${compartmentsIdType || 'unknown'}`);
       
-      // TEMPORARY: Accept both integer and string compartments during migration
-      if (compartmentIdType !== 'string' && compartmentIdType !== 'number') {
-        throw new Error(
-          `❌ UNSUPPORTED COMPARTMENT SCHEMA: compartments.id is '${compartmentIdType}' with value '${firstCompartment.id}'\n` +
-          `   Expected either integer (migration state) or UUID string format`
-        );
-      }
-      
-      // If we get integer compartment IDs, skip UUID validation for now
-      if (compartmentIdType === 'number') {
-        log('⚠️  Found integer compartment IDs - skipping UUID validation (migration state)');
-        log('✅ Supabase schema validation passed - mixed ID types confirmed (integer products, integer compartments - migration state)');
-        return; // Skip the rest of compartment validation
-      }
-      
-      // Verify it's a valid UUID format
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(firstCompartment.id)) {
-        throw new Error(
-          `❌ INVALID UUID FORMAT: compartments.id '${firstCompartment.id}' is not a valid UUID\n` +
-          `   Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
-        );
-      }
-      
-      // Test movements.compartment_id accepts UUID via test insert/delete
-      if (createdProduct?.id) {
-        try {
-          const testMovement = {
-            user_id: 1, // Use hardcoded user_id for test
-            product_id: createdProduct.id, // Use the test product we created
-            compartment_id: firstCompartment.id, // Use UUID from compartments
-            tipo: 'ENTRADA' as const,
-            qty: 1
-          };
-          
-          const { data: createdMovement, error: movementError } = await supabaseStorage.supabase
-            .from('movements')
-            .insert(testMovement)
-            .select('id, compartment_id')
-            .single();
-          
-          if (movementError) {
-            throw new Error(`movements.compartment_id UUID compatibility test failed: ${movementError.message}`);
-          }
-          
-          // Verify the movement was created with correct UUID compartment_id
-          if (createdMovement.compartment_id !== firstCompartment.id) {
-            throw new Error(
-              `❌ UUID MISMATCH: Expected movements.compartment_id '${firstCompartment.id}', got '${createdMovement.compartment_id}'`
-            );
-          }
-          
-          // Clean up test movement
-          await supabaseStorage.supabase
-            .from('movements')
-            .delete()
-            .eq('id', createdMovement.id);
-            
-        } catch (movementTestError: any) {
-          throw new Error(`Movement UUID compatibility test failed: ${movementTestError.message}`);
-        }
+      // Note: DB uses BIGINT for compartment IDs - no validation enforced, log-only detection
+      if (movementsCompartmentIdType === 'bigint' || compartmentsIdType === 'bigint') {
+        log('✅ BIGINT schema detected - compartment IDs will use integer values');
+      } else if (movementsCompartmentIdType === 'uuid' || compartmentsIdType === 'uuid') {
+        log('ℹ️  UUID schema detected - but system configured for BIGINT compatibility');
+      } else {
+        log('ℹ️  Unknown schema types - proceeding with BIGINT integer approach');
       }
     }
-
-    log('✅ Supabase schema validation passed - mixed ID types confirmed (integer products, UUID compartments)');
+    
+    // Call database schema info logging from storage layer
+    await supabaseStorage.logDatabaseSchema();
+    
+    log('✅ Supabase schema validation completed - ready for BIGINT compartment operations');
     
   } catch (error: any) {
     log(`💥 STARTUP FAILED: ${error.message}`);

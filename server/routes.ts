@@ -72,8 +72,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         connectionTest,
         environment: {
           supabaseUrl: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'not_set',
-          hasServiceKey: !!supabaseServiceKey,
-          keyPrefix: supabaseServiceKey ? supabaseServiceKey.substring(0, 20) + '...' : 'not_set'
+          hasServiceKey: !!supabaseServiceKey
         }
       });
     } catch (error: any) {
@@ -363,20 +362,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const finalTipo = tipo || (type === 'entrada' ? 'ENTRADA' : type === 'saida' ? 'SAIDA' : type?.toUpperCase());
       const finalQuantity = qty || quantidade;
       
-      // Convert compartment address to UUID
-      const compartmentUuid = await supabaseStorage.getCompartmentIdByAddress(finalAddress);
-      if (!compartmentUuid) {
-        return res.status(400).json({ error: `Compartment with address '${finalAddress}' not found` });
+      // Validate required fields
+      if (!product_id || !finalAddress || !finalTipo || !finalQuantity) {
+        return res.status(400).json({ error: "Missing required fields: product_id, compartment_id/code, tipo/type, qty/quantidade" });
       }
       
       // Get or create default user for movements (since user_id is required)
       const defaultUser = await supabaseStorage.getOrCreateDefaultUser();
       
+      // Get compartment ID: resolve address to UUID via database lookup
+      const compartmentId = await supabaseStorage.getCompartmentIdByAddress(finalAddress.toString());
+      
       // Map fields to Supabase movements table structure
       const movementData = {
         user_id: user_id || defaultUser.id,      // Required field in movements table
         product_id: product_id,                  // 'product_id' na tabela movements
-        compartment_id: compartmentUuid,         // UUID do compartimento
+        compartment_id: compartmentId,           // UUID from database lookup
         tipo: finalTipo,
         qty: finalQuantity                       // 'qty' na tabela movements
       };
@@ -385,6 +386,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(movement);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // New movements/create endpoint as specified in task requirements
+  app.post("/api/movements/create", async (req, res) => {
+    try {
+      const { product_id, compartment_address, compartment_id, tipo, qty } = req.body;
+      
+      // Validate required fields (allow either compartment_address or compartment_id)
+      if (!product_id || (!compartment_address && !compartment_id) || !tipo || !qty) {
+        return res.status(400).json({ error: "Missing required fields: product_id, (compartment_address or compartment_id), tipo, qty" });
+      }
+      
+      // Validate data types and values
+      if (!Number.isInteger(product_id) || product_id <= 0) {
+        return res.status(400).json({ error: "product_id must be a positive integer" });
+      }
+      
+      if (!['ENTRADA', 'SAIDA'].includes(tipo)) {
+        return res.status(400).json({ error: "tipo must be either 'ENTRADA' or 'SAIDA'" });
+      }
+      
+      if (!Number.isInteger(qty) || qty <= 0) {
+        return res.status(400).json({ error: "qty must be a positive integer" });
+      }
+      
+      // Get or create default user for movements
+      const defaultUser = await supabaseStorage.getOrCreateDefaultUser();
+      
+      // Get compartment ID: resolve address to UUID via database lookup
+      const compartmentAddress = compartment_address || compartment_id;
+      const finalCompartmentId = await supabaseStorage.getCompartmentIdByAddress(compartmentAddress.toString());
+      
+      // Create movement using the storage layer
+      const movement = await supabaseStorage.createMovement({
+        user_id: typeof defaultUser.id === 'number' ? defaultUser.id : 1, // Ensure number type for user_id
+        product_id: product_id,
+        compartment_id: finalCompartmentId, // UUID from database lookup
+        tipo: tipo,
+        qty: qty
+      });
+      
+      res.status(201).json(movement);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

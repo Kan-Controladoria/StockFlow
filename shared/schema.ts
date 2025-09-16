@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, uuid, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -49,7 +49,7 @@ export const movements = pgTable("movements", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   user_id: integer("user_id").notNull().references(() => profiles.id),
   product_id: integer("product_id").notNull().references(() => products.id),
-  compartment_id: uuid("compartment_id").notNull().references(() => compartments.id),
+  compartment_id: bigint("compartment_id", { mode: 'number' }).notNull(),
   tipo: text("tipo", { enum: ["ENTRADA", "SAIDA"] }).notNull(),
   qty: integer("qty").notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
