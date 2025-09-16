@@ -12,14 +12,23 @@ const ENDPOINTS = {
 // User ID existente do sistema (obtido da API profiles)
 const USER_ID = "c49a8014-fb46-4ff5-b307-349aae4cb723";
 
+// Compartment mapping from address to BIGINT ID
+const COMPARTMENT_MAP = {
+  "1A1": 1,
+  "1A2": 2,
+  "1A3": 3,
+  "1A4": 9,
+  "1A5": 10
+};
+
 // Gerar códigos únicos para evitar conflitos de unique constraint
 const timestamp = Date.now();
 const produtos = [
-  { code: `P001_${timestamp}`, name: "Produto Teste 1", compartment_address: "1A1" },
-  { code: `P002_${timestamp}`, name: "Produto Teste 2", compartment_address: "1A2" },
-  { code: `P003_${timestamp}`, name: "Produto Teste 3", compartment_address: "1A3" },
-  { code: `P004_${timestamp}`, name: "Produto Teste 4", compartment_address: "1A4" },
-  { code: `P005_${timestamp}`, name: "Produto Teste 5", compartment_address: "1A5" },
+  { code: `P001_${timestamp}`, name: "Produto Teste 1", compartment_address: "1A1", compartment_id: COMPARTMENT_MAP["1A1"] },
+  { code: `P002_${timestamp}`, name: "Produto Teste 2", compartment_address: "1A2", compartment_id: COMPARTMENT_MAP["1A2"] },
+  { code: `P003_${timestamp}`, name: "Produto Teste 3", compartment_address: "1A3", compartment_id: COMPARTMENT_MAP["1A3"] },
+  { code: `P004_${timestamp}`, name: "Produto Teste 4", compartment_address: "1A4", compartment_id: COMPARTMENT_MAP["1A4"] },
+  { code: `P005_${timestamp}`, name: "Produto Teste 5", compartment_address: "1A5", compartment_id: COMPARTMENT_MAP["1A5"] },
 ];
 
 // Função auxiliar: tenta um endpoint, se falhar testa o próximo
@@ -75,7 +84,7 @@ async function runTest() {
       continue;
     }
 
-    // 2. Entrada de 100 unidades (usando endereço de compartimento)
+    // 2. Entrada de 100 unidades (usando endereço)
     const entradaResult = await tryFetch(ENDPOINTS.movements, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -94,7 +103,7 @@ async function runTest() {
       console.log(`❌ Falha na entrada de ${p.name}`);
     }
 
-    // 3. Saída de 30 unidades (usando endereço de compartimento)
+    // 3. Saída de 30 unidades (usando endereço)
     const saidaResult = await tryFetch(ENDPOINTS.movements, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

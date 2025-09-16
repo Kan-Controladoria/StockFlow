@@ -23,7 +23,7 @@ export interface Database {
       }
       products: {
         Row: {
-          id: string
+          id: number
           codigo_barras: string
           codigo_produto: string
           produto: string
@@ -34,7 +34,7 @@ export interface Database {
           updated_at: string
         }
         Insert: {
-          id?: string
+          id?: number
           codigo_barras: string
           codigo_produto: string
           produto: string
@@ -45,7 +45,7 @@ export interface Database {
           updated_at?: string
         }
         Update: {
-          id?: string
+          id?: number
           codigo_barras?: string
           codigo_produto?: string
           produto?: string
@@ -58,7 +58,7 @@ export interface Database {
       }
       compartments: {
         Row: {
-          id: string
+          id: number
           address: string
           corredor: number
           linha: string
@@ -66,7 +66,7 @@ export interface Database {
           created_at: string
         }
         Insert: {
-          id?: string
+          id?: number
           address: string
           corredor: number
           linha: string
@@ -74,7 +74,7 @@ export interface Database {
           created_at?: string
         }
         Update: {
-          id?: string
+          id?: number
           address?: string
           corredor?: number
           linha?: string
@@ -84,25 +84,25 @@ export interface Database {
       }
       stock_by_compartment: {
         Row: {
-          id: string
-          compartment_id: string
-          product_id: string
+          id: number
+          compartment_id: number
+          product_id: number
           quantity: number
           created_at: string
           updated_at: string
         }
         Insert: {
-          id?: string
-          compartment_id: string
-          product_id: string
+          id?: number
+          compartment_id: number
+          product_id: number
           quantity: number
           created_at?: string
           updated_at?: string
         }
         Update: {
-          id?: string
-          compartment_id?: string
-          product_id?: string
+          id?: number
+          compartment_id?: number
+          product_id?: number
           quantity?: number
           created_at?: string
           updated_at?: string
@@ -110,28 +110,28 @@ export interface Database {
       }
       movements: {
         Row: {
-          id: string
+          id: number
           user_id: string
-          product_id: string
-          compartment_id: string
+          product_id: number
+          compartment_id: number
           tipo: 'ENTRADA' | 'SAIDA'
           qty: number
           timestamp: string
         }
         Insert: {
-          id?: string
+          id?: number
           user_id: string
-          product_id: string
-          compartment_id: string
+          product_id: number
+          compartment_id: number
           tipo: 'ENTRADA' | 'SAIDA'
           qty: number
           timestamp?: string
         }
         Update: {
-          id?: string
+          id?: number
           user_id?: string
-          product_id?: string
-          compartment_id?: string
+          product_id?: number
+          compartment_id?: number
           tipo?: 'ENTRADA' | 'SAIDA'
           qty?: number
           timestamp?: string

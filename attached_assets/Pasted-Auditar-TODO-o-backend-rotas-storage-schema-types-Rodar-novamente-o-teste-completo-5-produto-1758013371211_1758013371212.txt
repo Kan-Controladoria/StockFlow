@@ -1,0 +1,57 @@
+Auditar TODO o backend (rotas, storage, schema, types).
+
+Rodar novamente o teste completo (5 produtos → entrada 100 → saída 30 → saldo esperado 70).
+
+Corrigir qualquer incoerência ainda existente e repetir até dar 100% sucesso.
+
+Emitir um relatório consolidado no console com todos os resultados.
+
+📌 Prompt Final de Avaliação (cola no Agent3/Replit)
+Quero que executes um processo completo de auditoria e validação final do sistema.
+
+🎯 OBJETIVO:
+Garantir que **todas as rotas e operações** funcionem corretamente com o schema atualizado:
+- products.id → BIGINT
+- compartments.id → BIGINT
+- movements.product_id → BIGINT
+- movements.compartment_id → BIGINT
+- movements.user_id → UUID
+
+---
+
+### ETAPAS OBRIGATÓRIAS
+
+1. 🔍 **Auditoria Completa**
+   - Revisar todas as rotas da API (/api/products, /api/movements, /api/profiles, /api/reports, etc).
+   - Verificar se TODAS usam supabaseStorage com os tipos corretos.
+   - Confirmar que não há referências antigas a UUID nos campos de product_id e compartment_id.
+   - Corrigir imediatamente qualquer inconsistência encontrada.
+
+2. 🛠️ **Validação do Schema**
+   - Conferir se Drizzle schema reflete corretamente os tipos BIGINT/UUID.
+   - Ajustar typescript (supabaseStorage.ts, routes.ts) para não gerar erros de tipagem.
+
+3. 🚀 **Teste Completo**
+   - Criar 5 produtos fictícios (corredores 1A1 a 5A1).
+   - Para cada produto:
+     - Inserir 100 unidades (movimento tipo "ENTRADA").
+     - Retirar 30 unidades (movimento tipo "SAIDA").
+   - Consultar saldo final.
+   - Esperado: saldo = 70 em todos os produtos.
+
+4. 📊 **Relatório Consolidado**
+   - Imprimir no console um resumo final no formato:
+     🛒 Produto [ID] | Corredor: [X] | Esperado: 70 | Real: [Y] | ✅/❌
+   - Se qualquer valor não bater, corrigir o código e repetir o teste até todos passarem.
+
+---
+
+### CRITÉRIOS DE ACEITE
+
+✅ Nenhum erro de rota.  
+✅ Nenhum erro de tipagem (TypeScript/LSP).  
+✅ Todas as rotas operando com BIGINT/UUID corretos.  
+✅ Teste completo com saldo final 70 em todos os produtos.  
+✅ Relatório final impresso no console com 5 linhas (1 por produto).  
+
+Se algum problema for encontrado durante qualquer etapa, deves **corrigir imediatamente** e **reexecutar 

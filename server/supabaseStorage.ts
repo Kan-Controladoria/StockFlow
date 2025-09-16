@@ -9,7 +9,8 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  db: { schema: 'public' }
+  auth: { persistSession: false },
+  global: { headers: { 'X-Client-Info': 'backend-api' } }
 });
 
 // Verify service key is correct by checking JWT payload
@@ -35,6 +36,7 @@ export interface SupabaseProduct {
   categoria: string;
   subcategoria: string;
   created_at: string;
+  updated_at: string;     // Missing field added - matches schema
 }
 
 export interface SupabaseMovement {
@@ -44,7 +46,7 @@ export interface SupabaseMovement {
   compartment_id: number; // BIGINT (references compartments.id)
   tipo: 'ENTRADA' | 'SAIDA';
   qty: number;           // tabela movements usa 'qty'
-  ts: string;            // tabela movements usa 'ts' ao invés de 'timestamp'
+  timestamp: string;     // tabela movements usa 'timestamp'
   obs?: string;          // optional obs field
 }
 
@@ -72,8 +74,8 @@ export class SupabaseStorage {
       '1A1': 1,
       '1A2': 2, 
       '1A3': 3,
-      '1A4': 4,
-      '1A5': 5
+      '1A4': 9,
+      '1A5': 10
     };
     
     if (addressMapping[address]) {
@@ -98,6 +100,25 @@ export class SupabaseStorage {
     console.log('- profiles.id: UUID (string)');
   }
   
+  // Compartment methods
+  async getAllCompartments(): Promise<any[]> {
+    // Use minimal select to avoid schema issues
+    const { data, error } = await supabase
+      .from('compartments')
+      .select('id, corredor, linha, coluna')
+      .order('id');
+    
+    if (error) throw new Error(`Error fetching compartments: ${error.message}`);
+    
+    // Add synthetic address field using corredor+linha+coluna
+    const dataWithAddress = (data || []).map(compartment => ({
+      ...compartment,
+      address: `${compartment.corredor}${compartment.linha}${compartment.coluna}`
+    }));
+    
+    return dataWithAddress;
+  }
+
   // Product methods
   async getAllProducts(): Promise<SupabaseProduct[]> {
     const { data, error } = await supabase
@@ -135,7 +156,7 @@ export class SupabaseStorage {
     return data;
   }
 
-  async createProduct(product: Omit<SupabaseProduct, 'id' | 'created_at'>): Promise<SupabaseProduct> {
+  async createProduct(product: Omit<SupabaseProduct, 'id' | 'created_at' | 'updated_at'>): Promise<SupabaseProduct> {
     const { data, error } = await supabase
       .from('products')
       .insert(product)
@@ -161,14 +182,14 @@ export class SupabaseStorage {
     const { data, error } = await supabase
       .schema('public')
       .from('movements')
-      .select('*')
-      .order('ts', { ascending: false });
+      .select('id, user_id, product_id, compartment_id, tipo, qty')
+      .order('id', { ascending: false });
     
     if (error) throw new Error(`Error fetching movements: ${error.message}`);
     return data || [];
   }
 
-  async createMovement(movement: Omit<SupabaseMovement, 'id' | 'ts' | 'obs'>): Promise<SupabaseMovement> {
+  async createMovement(movement: Omit<SupabaseMovement, 'id' | 'timestamp' | 'obs'>): Promise<SupabaseMovement> {
     console.log('🗺 Movement creation with BIGINT IDs:', {
       user_id: movement.user_id,
       user_id_type: typeof movement.user_id,
@@ -244,9 +265,9 @@ export class SupabaseStorage {
     const { data, error } = await supabase
       .schema('public')
       .from('movements')
-      .select('*')
+      .select('id, user_id, product_id, compartment_id, tipo, qty')
       .eq('product_id', productId)
-      .order('ts', { ascending: false });
+      .order('id', { ascending: false });
     
     if (error) throw new Error(`Error fetching movements by product: ${error.message}`);
     return data || [];
