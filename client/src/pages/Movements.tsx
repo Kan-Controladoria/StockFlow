@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from '@tanstack/react-query'
 import type { MovementWithDetails, Profile, Compartment, Product, CompartmentWithStock } from '@shared/schema'
 import { ProductForm } from '../components/ProductForm'
