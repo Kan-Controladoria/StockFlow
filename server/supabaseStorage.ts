@@ -151,24 +151,22 @@ export class SupabaseStorage {
       
       // Seed compartment 3B7 if missing
       const compartment3B7Seed = `
-        INSERT INTO compartments (id, address, corredor, linha, coluna) 
-        VALUES (11, '3B7', 3, 'B', 7) 
-        ON CONFLICT (id) DO UPDATE SET
-          address = EXCLUDED.address,
+        INSERT INTO compartments (address, corredor, linha, coluna) 
+        VALUES ('3B7', 3, 'B', 7) 
+        ON CONFLICT (address) DO UPDATE SET
           corredor = EXCLUDED.corredor,
           linha = EXCLUDED.linha,
           coluna = EXCLUDED.coluna
       `;
       
       await this.query(compartment3B7Seed);
-      console.log('✅ Compartment 3B7 seeded (ID: 11)');
+      console.log('✅ Compartment 3B7 seeded (auto-generated ID)');
       
-      // Seed product 6 if missing
+      // Seed test product if missing
       const product6Seed = `
-        INSERT INTO products (id, codigo_barras, codigo_produto, produto, departamento, categoria, subcategoria, created_at, updated_at) 
-        VALUES (6, 'UNIFIED3B7_2025', 'PROD_UNIFIED3B7', 'Test Product 3B7', 'Test Dept', 'Test Cat', 'Test Sub', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        ON CONFLICT (id) DO UPDATE SET
-          codigo_barras = EXCLUDED.codigo_barras,
+        INSERT INTO products (codigo_barras, codigo_produto, produto, departamento, categoria, subcategoria, created_at, updated_at) 
+        VALUES ('UNIFIED3B7_2025', 'PROD_UNIFIED3B7', 'Test Product 3B7', 'Test Dept', 'Test Cat', 'Test Sub', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (codigo_barras) DO UPDATE SET
           codigo_produto = EXCLUDED.codigo_produto,
           produto = EXCLUDED.produto,
           departamento = EXCLUDED.departamento,
@@ -178,26 +176,25 @@ export class SupabaseStorage {
       `;
       
       await this.query(product6Seed);
-      console.log('✅ Product 6 seeded');
+      console.log('✅ Test product seeded (auto-generated ID)');
       
       // Seed a few basic test compartments for stability
       const basicCompartmentsSeed = `
-        INSERT INTO compartments (id, address, corredor, linha, coluna) VALUES
-        (1, '1A1', 1, 'A', 1),
-        (2, '1A2', 1, 'A', 2),
-        (3, '2A1', 2, 'A', 1),
-        (10, '3B6', 3, 'B', 6),
-        (11, '3B7', 3, 'B', 7),
-        (12, '3B8', 3, 'B', 8)
-        ON CONFLICT (id) DO UPDATE SET
-          address = EXCLUDED.address,
+        INSERT INTO compartments (address, corredor, linha, coluna) VALUES
+        ('1A1', 1, 'A', 1),
+        ('1A2', 1, 'A', 2),
+        ('2A1', 2, 'A', 1),
+        ('3B6', 3, 'B', 6),
+        ('3B7', 3, 'B', 7),
+        ('3B8', 3, 'B', 8)
+        ON CONFLICT (address) DO UPDATE SET
           corredor = EXCLUDED.corredor,
           linha = EXCLUDED.linha,
           coluna = EXCLUDED.coluna
       `;
       
       await this.query(basicCompartmentsSeed);
-      console.log('✅ Basic compartments seeded (1A1, 1A2, 2A1, 3B6, 3B7, 3B8)');
+      console.log('✅ Basic compartments seeded with auto-generated IDs (1A1, 1A2, 2A1, 3B6, 3B7, 3B8)');
       
     } catch (error: any) {
       console.error('❌ Data seeding failed:', error.message);
