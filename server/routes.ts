@@ -98,8 +98,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true,
         ...identity,
         critical_issues: {
-          compartment_3b7_missing: !identity.compartment_3b7_exists,
-          product_6_missing: !identity.product_6_exists,
+          compartment_integrity_failed: !identity.compartment_integrity,
           data_loss_detected: identity.compartment_count < 5 || identity.product_count < 5
         }
       });
@@ -113,26 +112,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/debug/seed-critical-data", async (req, res) => {
+  app.post("/api/debug/verify-integrity", async (req, res) => {
     try {
-      console.log('🌱 [DEBUG ROUTE] Critical data seeding requested...');
-      await supabaseStorage.seedMissingCriticalData();
-      
-      // Verify seeding worked
+      console.log('🔍 [DEBUG ROUTE] Database integrity verification requested...');
       const verificationResult = await supabaseStorage.verifyDatabaseIdentity();
       
       res.json({
         success: true,
-        message: 'Critical data seeded successfully',
+        message: 'Database integrity verification completed',
         verification: {
-          compartment_3b7_exists: verificationResult.compartment_3b7_exists,
-          compartment_3b7_data: verificationResult.compartment_3b7_data,
-          product_6_exists: verificationResult.product_6_exists,
-          product_6_data: verificationResult.product_6_data
+          compartment_integrity: verificationResult.compartment_integrity,
+          expected_compartments: verificationResult.expected_compartments,
+          actual_compartments: verificationResult.actual_compartments
         }
       });
     } catch (error: any) {
-      console.error('❌ Critical data seeding failed:', error.message);
+      console.error('❌ Database integrity verification failed:', error.message);
       res.status(500).json({ 
         success: false,
         error: error.message,

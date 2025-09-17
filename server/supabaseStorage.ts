@@ -81,7 +81,7 @@ export class SupabaseStorage {
   }
   
   
-  // DATABASE IDENTITY VERIFICATION - Critical for data loss recovery
+  // DATABASE IDENTITY VERIFICATION - Generic integrity validation
   async verifyDatabaseIdentity(): Promise<any> {
     try {
       console.log('🔍 [CRITICAL] DATABASE IDENTITY VERIFICATION - Data Recovery Mode');
@@ -112,30 +112,29 @@ export class SupabaseStorage {
         profiles: dbInfo.profile_count
       });
       
-      // CRITICAL: Check if compartment 3B7 exists
-      console.log('🔍 [CRITICAL] Checking compartment 3B7 status...');
-      const compartment3B7Check = await this.query(
-        'SELECT id, address, corredor, linha, coluna FROM compartments WHERE address = $1 OR (corredor = 3 AND linha = \'B\' AND coluna = 7)',
-        ['3B7']
-      );
+      // Validate compartment integrity - should have exactly 150 compartments
+      const expectedCompartments = 150;
+      const actualCompartments = parseInt(dbInfo.compartment_count, 10);
       
-      console.log('📋 3B7 Status:', compartment3B7Check.length > 0 ? compartment3B7Check[0] : 'NOT FOUND');
+      console.log(`🔍 [INTEGRITY] Compartment validation: ${actualCompartments}/${expectedCompartments}`);
       
-      // Check product 6 status
-      console.log('🔍 [CRITICAL] Checking product 6 status...');
-      const product6Check = await this.query(
-        'SELECT id, codigo_produto, produto FROM products WHERE id = 6',
-        []
-      );
-      
-      console.log('📋 Product 6 Status:', product6Check.length > 0 ? product6Check[0] : 'NOT FOUND');
+      if (actualCompartments !== expectedCompartments) {
+        console.log('⚠️ [WARNING] Compartment count mismatch - logging first 10 for diagnosis');
+        const sampleCompartments = await this.query(
+          'SELECT id, address, corredor, linha, coluna FROM compartments ORDER BY id LIMIT 10'
+        );
+        sampleCompartments.forEach((comp: any, index: number) => {
+          console.log(`📋 Sample ${index + 1}: ${comp.address || `${comp.corredor}${comp.linha}${comp.coluna}`} (ID: ${comp.id})`);
+        });
+      } else {
+        console.log('✅ [INTEGRITY] Compartment count validated - system ready');
+      }
       
       return {
         ...dbInfo,
-        compartment_3b7_exists: compartment3B7Check.length > 0,
-        compartment_3b7_data: compartment3B7Check[0] || null,
-        product_6_exists: product6Check.length > 0,
-        product_6_data: product6Check[0] || null
+        compartment_integrity: actualCompartments === expectedCompartments,
+        expected_compartments: expectedCompartments,
+        actual_compartments: actualCompartments
       };
       
     } catch (error: any) {
@@ -144,65 +143,6 @@ export class SupabaseStorage {
     }
   }
   
-  // DATA SEEDING - Critical recovery function
-  async seedMissingCriticalData(): Promise<void> {
-    try {
-      console.log('🌱 [RECOVERY] Seeding missing critical data...');
-      
-      // Seed compartment 3B7 if missing - check first to avoid conflicts
-      const existing3B7 = await this.query('SELECT id FROM compartments WHERE address = $1', ['3B7']);
-      if (existing3B7.length === 0) {
-        await this.query(
-          'INSERT INTO compartments (address, corredor, linha, coluna) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4)',
-          ['3B7', 3, 'B', 7]
-        );
-        console.log('✅ Compartment 3B7 seeded (auto-generated ID)');
-      } else {
-        console.log('📋 Compartment 3B7 already exists, skipping');
-      }
-      
-      // Seed test product if missing - generate unique codigo_barras to prevent NULL
-      const uniqueBarcode = `AUTO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const uniqueProductCode = `PROD_AUTO_${Date.now()}`;
-      
-      await this.query(
-        `INSERT INTO products (codigo_barras, codigo_produto, produto, departamento, categoria, subcategoria, created_at, updated_at) 
-         OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-         ON CONFLICT (codigo_barras) DO UPDATE SET
-           codigo_produto = EXCLUDED.codigo_produto,
-           produto = EXCLUDED.produto,
-           updated_at = CURRENT_TIMESTAMP`,
-        [uniqueBarcode, uniqueProductCode, 'Produto Teste Auto-Gerado', 'Departamento Teste', 'Categoria Teste', 'Subcategoria Teste']
-      );
-      console.log(`✅ Test product seeded with unique codigo_barras: ${uniqueBarcode}`);
-      
-      // Seed basic test compartments - check each one individually
-      const basicCompartments = [
-        ['1A1', 1, 'A', 1],
-        ['1A2', 1, 'A', 2], 
-        ['2A1', 2, 'A', 1],
-        ['3B6', 3, 'B', 6],
-        ['3B8', 3, 'B', 8]
-      ];
-      
-      for (const [address, corredor, linha, coluna] of basicCompartments) {
-        const existing = await this.query('SELECT id FROM compartments WHERE address = $1', [address]);
-        if (existing.length === 0) {
-          await this.query(
-            'INSERT INTO compartments (address, corredor, linha, coluna) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4)',
-            [address, corredor, linha, coluna]
-          );
-          console.log(`✅ Compartment ${address} seeded (auto-generated ID)`);
-        } else {
-          console.log(`📋 Compartment ${address} already exists, skipping`);
-        }
-      }
-      
-    } catch (error: any) {
-      console.error('❌ Data seeding failed:', error.message);
-      throw error;
-    }
-  }
   
   // HARDENED Address to BIGINT compartment ID lookup - Case-insensitive with numeric ID support
   async getCompartmentIdByAddress(address: string): Promise<number> {
@@ -266,27 +206,8 @@ export class SupabaseStorage {
         console.log(`⚠️ Address format not recognized for individual lookup: ${normalized}`);
       }
       
-      // Step 3: AUTO-RECOVER - Try seeding missing data if this is 3B7
-      if (normalized === '3B7') {
-        console.log('🚨 [AUTO-RECOVERY] Critical address 3B7 missing - attempting data recovery...');
-        await this.seedMissingCriticalData();
-        
-        // Retry lookup after seeding
-        console.log('🔄 Retrying 3B7 lookup after data recovery...');
-        const recoveryResult = await this.query(
-          'SELECT id FROM compartments WHERE UPPER(address) = UPPER($1) LIMIT 1',
-          ['3B7']
-        );
-        
-        if (recoveryResult.length > 0) {
-          const recoveredId = parseInt(recoveryResult[0].id, 10);
-          console.log(`✅ [RECOVERED] 3B7 found after data seeding: ID ${recoveredId}`);
-          return recoveredId;
-        }
-      }
-      
-      // Step 4: Show available compartments if still not found
-      console.log('📍 Step 4: Compartment not found, fetching available data...');
+      // Step 3: Show available compartments if still not found
+      console.log('📍 Step 3: Compartment not found, fetching available data...');
       const available = await this.query(
         'SELECT id, address, corredor, linha, coluna FROM compartments ORDER BY id LIMIT 20'
       );

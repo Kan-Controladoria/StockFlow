@@ -78,16 +78,14 @@ async function validateSupabaseSchema() {
       const existingCompartments = await supabaseStorage.getAllCompartments();
       log(`✅ Found ${existingCompartments.length} existing compartments in PostgreSQL database`);
       
-      // Verify critical data or seed if missing
+      // Verify database integrity
       log('🔍 Verifying critical data exists...');
       const identity = await supabaseStorage.verifyDatabaseIdentity();
       
-      if (!identity.compartment_3b7_exists || !identity.product_6_exists) {
-        log('⚠️ Critical data missing, seeding now...');
-        await supabaseStorage.seedMissingCriticalData();
-        log('✅ Critical data seeded successfully');
+      if (identity.compartment_integrity) {
+        log('✅ Database integrity verified - system ready for operations');
       } else {
-        log('✅ Critical data verified - compartment 3B7 and product 6 exist');
+        log(`⚠️ Compartment count mismatch: ${identity.actual_compartments}/${identity.expected_compartments} - system may have missing data`);
       }
       
     } catch (testError: any) {

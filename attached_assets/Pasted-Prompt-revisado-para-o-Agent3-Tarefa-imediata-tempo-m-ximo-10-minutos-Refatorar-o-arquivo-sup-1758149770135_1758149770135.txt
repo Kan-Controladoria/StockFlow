@@ -1,0 +1,87 @@
+Prompt revisado para o Agent3
+
+🎯 Tarefa imediata (tempo máximo: 10 minutos)
+Refatorar o arquivo supabaseStorage.ts, corrigindo os equívocos de programação introduzidos em etapas anteriores. O foco é remover limitações artificiais, manter consistência com o banco (150 compartimentos válidos) e assegurar performance.
+
+⚠️ Problemas identificados:
+
+Hardcodes de compartimento
+
+Código verifica especificamente 3B7 em verifyDatabaseIdentity() e getCompartmentIdByAddress().
+
+Isso limita o sistema a um único compartimento como referência.
+
+Seeds artificiais
+
+seedMissingCriticalData() insere manualmente 3B7, 1A1, 1A2, 2A1, 3B6, 3B8.
+
+Isso polui o banco, já que existem exatamente 150 compartimentos corretos.
+
+Auto-recovery seletivo
+
+getCompartmentIdByAddress() faz tratamento exclusivo de 3B7.
+
+Qualquer outro compartimento ausente quebra o sistema.
+
+Produto de teste auto-gerado
+
+seedMissingCriticalData() cria produto fake “Produto Teste Auto-Gerado”.
+
+Esse comportamento deve ser removido em produção.
+
+✅ Correções obrigatórias:
+
+Verificação de compartimentos:
+
+Substituir checagem fixa de 3B7 por validação genérica de integridade.
+
+Exemplo: SELECT COUNT(*) deve retornar 150.
+
+Se necessário, logar todos os corredor/linha/coluna/address para diagnóstico.
+
+Remoção de seeding artificial:
+
+Eliminar toda lógica de inserção automática de compartimentos (3B7, 1A1 etc).
+
+Se faltar dado no banco, apenas lançar erro claro, sem tentar recriar.
+
+Generalizar getCompartmentIdByAddress():
+
+Manter fluxo de validação (numérico → address → parsing corredor/linha/coluna).
+
+Remover qualquer tratamento exclusivo para 3B7.
+
+Em caso de erro, retornar exceção listando compartimentos disponíveis.
+
+Remover produto fake:
+
+Excluir inserção de “Produto Teste Auto-Gerado”.
+
+Produtos só podem ser criados pelo fluxo oficial de cadastro.
+
+Manter boas práticas já existentes:
+
+Logs detalhados.
+
+Normalização de IDs (BIGINT).
+
+Validação de UUID em usuários.
+
+Tratamento consistente de erros.
+
+📊 Entregável:
+
+Novo supabaseStorage.ts sem hardcodes, seeds artificiais ou produtos fake.
+
+Logs de integridade genéricos (todos os compartimentos).
+
+Testes confirmando que:
+
+getCompartmentIdByAddress("1C6") encontra o compartimento.
+
+createMovementByAddress() insere movimento corretamente.
+
+Produtos só podem ser criados via tela de cadastro.
+
+🚀 Tempo máximo de execução: 10 minutos.
+Ao concluir, apenas confirme “Success”.
