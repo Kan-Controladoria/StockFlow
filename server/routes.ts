@@ -265,9 +265,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/products/search/:code", async (req, res) => {
+  app.get("/api/products/search/:query", async (req, res) => {
     try {
-      const product = await supabaseStorage.findProductByCode(req.params.code);
+      const product = await supabaseStorage.findProductByCode(req.params.query);
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
