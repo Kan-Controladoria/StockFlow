@@ -1000,33 +1000,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let finalProductId: number;
       
       if (typeof product_id === 'number') {
-        // Direct number, use as ID
-        finalProductId = product_id;
-        console.log(`🔍 [MOVEMENT] Using direct product ID: ${finalProductId}`);
+        // Direct number - validate if exists
+        console.log(`🔍 [MOVEMENT] Validating numeric product ID: ${product_id}`);
+        const productById = await supabaseStorage.getProduct(product_id);
+        if (productById) {
+          finalProductId = product_id;
+          console.log(`✅ [MOVEMENT] Using direct product ID: ${finalProductId}`);
+        } else {
+          return res.status(400).json({ error: "Produto não encontrado" });
+        }
       } else if (typeof product_id === 'string') {
-        // String (numeric or alphanumeric), always try codigo_produto first
-        console.log(`🔍 [MOVEMENT] Looking up product by codigo_produto: ${product_id}`);
-        const product = await supabaseStorage.findProductByCode(product_id);
-        
-        if (product) {
-          // Found by codigo_produto
-          finalProductId = product.id;
-          console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
-        } else if (/^\d+$/.test(product_id)) {
-          // Not found by codigo_produto, but it's numeric - try as direct ID
-          console.log(`🔍 [MOVEMENT] Not found by codigo_produto, trying as direct ID: ${product_id}`);
-          const numericId = parseInt(product_id, 10);
+        if (/^\d+$/.test(product_id)) {
+          // String numérica (ex: "20100")
+          console.log(`🔍 [MOVEMENT] Looking up product by codigo_produto: ${product_id}`);
+          const product = await supabaseStorage.findProductByCode(product_id);
           
-          // Validate if the ID exists in the database
-          const productById = await supabaseStorage.getProduct(numericId);
-          if (productById) {
-            finalProductId = numericId;
-            console.log(`✅ [MOVEMENT] Using string "${product_id}" as direct ID: ${finalProductId}`);
+          if (product) {
+            // Found by codigo_produto
+            finalProductId = product.id;
+            console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
+          } else {
+            // Not found by codigo_produto, try as direct ID
+            console.log(`🔍 [MOVEMENT] Not found by codigo_produto, trying as direct ID: ${product_id}`);
+            const numericId = parseInt(product_id, 10);
+            const productById = await supabaseStorage.getProduct(numericId);
+            if (productById) {
+              finalProductId = numericId;
+              console.log(`✅ [MOVEMENT] Using string "${product_id}" as direct ID: ${finalProductId}`);
+            } else {
+              return res.status(400).json({ error: "Produto não encontrado" });
+            }
+          }
+        } else {
+          // String alfanumérica (ex: "PRODRy1u")
+          console.log(`🔍 [MOVEMENT] Looking up product by codigo_produto: ${product_id}`);
+          const product = await supabaseStorage.findProductByCode(product_id);
+          
+          if (product) {
+            finalProductId = product.id;
+            console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
           } else {
             return res.status(400).json({ error: "Produto não encontrado" });
           }
-        } else {
-          return res.status(400).json({ error: "Produto não encontrado" });
         }
       } else {
         return res.status(400).json({ error: "product_id must be either a number (id) or string (codigo_produto)" });
