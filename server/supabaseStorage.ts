@@ -161,17 +161,20 @@ export class SupabaseStorage {
         console.log('📋 Compartment 3B7 already exists, skipping');
       }
       
-      // Seed test product if missing - check first to avoid conflicts
-      const existingProduct = await this.query('SELECT id FROM products WHERE codigo_barras = $1', ['UNIFIED3B7_2025']);
-      if (existingProduct.length === 0) {
-        await this.query(
-          'INSERT INTO products (codigo_barras, codigo_produto, produto, departamento, categoria, subcategoria, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-          ['UNIFIED3B7_2025', 'PROD_UNIFIED3B7', 'Test Product 3B7', 'Test Dept', 'Test Cat', 'Test Sub']
-        );
-        console.log('✅ Test product seeded (auto-generated ID)');
-      } else {
-        console.log('📋 Test product already exists, skipping');
-      }
+      // Seed test product if missing - generate unique codigo_barras to prevent NULL
+      const uniqueBarcode = `AUTO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const uniqueProductCode = `PROD_AUTO_${Date.now()}`;
+      
+      await this.query(
+        `INSERT INTO products (codigo_barras, codigo_produto, produto, departamento, categoria, subcategoria, created_at, updated_at) 
+         OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (codigo_barras) DO UPDATE SET
+           codigo_produto = EXCLUDED.codigo_produto,
+           produto = EXCLUDED.produto,
+           updated_at = CURRENT_TIMESTAMP`,
+        [uniqueBarcode, uniqueProductCode, 'Produto Teste Auto-Gerado', 'Departamento Teste', 'Categoria Teste', 'Subcategoria Teste']
+      );
+      console.log(`✅ Test product seeded with unique codigo_barras: ${uniqueBarcode}`);
       
       // Seed basic test compartments - check each one individually
       const basicCompartments = [
