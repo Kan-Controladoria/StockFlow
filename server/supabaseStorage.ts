@@ -291,9 +291,9 @@ export class SupabaseStorage {
         'SELECT id, address, corredor, linha, coluna FROM compartments ORDER BY id LIMIT 20'
       );
       
-      const availableAddresses = available.map(c => 
+      const availableAddresses = available.map((c: any) => 
         c.address || `${c.corredor}${c.linha}${c.coluna}`
-      ).filter(addr => addr && addr !== 'nullnullnull').join(', ') || 'none';
+      ).filter((addr: any) => addr && addr !== 'nullnullnull').join(', ') || 'none';
       
       console.error(`❌ Address not found: ${normalized}`);
       console.error(`📋 Available addresses: ${availableAddresses}`);
@@ -325,7 +325,7 @@ export class SupabaseStorage {
       );
       
       // Ensure all compartments have address field (synthesize if null)
-      return compartments.map(comp => ({
+      return compartments.map((comp: any) => ({
         ...comp,
         address: comp.address || `${comp.corredor}${comp.linha}${comp.coluna}`
       }));
@@ -660,7 +660,7 @@ export class SupabaseStorage {
         'SELECT id, email, full_name, created_at FROM profiles ORDER BY created_at DESC'
       );
       console.log(`✅ [UNIFIED] Found ${result.length} profiles via PostgreSQL`);
-      return result.map(row => ({
+      return result.map((row: any) => ({
         id: row.id,
         email: row.email || '',
         full_name: row.full_name || ''

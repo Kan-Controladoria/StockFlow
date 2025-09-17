@@ -1079,9 +1079,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields: product_id, (compartment_address or compartment_id), tipo, qty" });
       }
       
-      // Validate data types and values
-      if (!Number.isInteger(product_id) || product_id <= 0) {
-        return res.status(400).json({ error: "product_id must be a positive integer" });
+      // Resolve product_id: accept both id (BIGINT) and codigo_produto (string) - same logic as /api/movements
+      let finalProductId: number;
+      
+      if (typeof product_id === 'number') {
+        // Direct number - validate if exists
+        console.log(`🔍 [MOVEMENT] Validating numeric product ID: ${product_id}`);
+        const productById = await supabaseStorage.getProduct(product_id);
+        if (productById) {
+          finalProductId = product_id;
+          console.log(`✅ [MOVEMENT] Using direct product ID: ${finalProductId}`);
+        } else {
+          return res.status(400).json({ error: "Produto não encontrado" });
+        }
+      } else if (typeof product_id === 'string') {
+        if (/^\d+$/.test(product_id)) {
+          // String numérica (ex: "20100")
+          console.log(`🔍 [MOVEMENT] Looking up product by codigo_produto: ${product_id}`);
+          const product = await supabaseStorage.findProductByCode(product_id);
+          
+          if (product) {
+            // Found by codigo_produto
+            finalProductId = parseInt(product.id.toString(), 10);
+            console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
+          } else {
+            // Not found by codigo_produto, try as direct ID
+            console.log(`🔍 [MOVEMENT] Not found by codigo_produto, trying as direct ID: ${product_id}`);
+            const numericId = parseInt(product_id, 10);
+            const productById = await supabaseStorage.getProduct(numericId);
+            if (productById) {
+              finalProductId = numericId;
+              console.log(`✅ [MOVEMENT] Using string "${product_id}" as direct ID: ${finalProductId}`);
+            } else {
+              return res.status(400).json({ error: "Produto não encontrado" });
+            }
+          }
+        } else {
+          // String alfanumérica (ex: "PRODRy1u")
+          console.log(`🔍 [MOVEMENT] Looking up product by codigo_produto: ${product_id}`);
+          const product = await supabaseStorage.findProductByCode(product_id);
+          
+          if (product) {
+            finalProductId = parseInt(product.id.toString(), 10);
+            console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
+          } else {
+            return res.status(400).json({ error: "Produto não encontrado" });
+          }
+        }
+      } else {
+        return res.status(400).json({ error: "product_id must be either a number (id) or string (codigo_produto)" });
       }
       
       if (!['ENTRADA', 'SAIDA'].includes(tipo)) {
@@ -1109,7 +1155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create movement using the storage layer
       const movement = await supabaseStorage.createMovement({
         user_id: defaultUser.id, // UUID string for user_id
-        product_id: product_id,
+        product_id: finalProductId, // Resolved BIGINT id from either direct id or codigo_produto lookup
         compartment_id: finalCompartmentId, // BIGINT number from address lookup
         tipo: tipo,
         qty: qty
