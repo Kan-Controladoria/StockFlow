@@ -1055,7 +1055,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Map fields to Supabase movements table structure
       const movementData = {
-        user_id: user_id || defaultUser.id,      // Required field in movements table
+        user_id: defaultUser.id,                 // Always use default user to avoid FK violations
         product_id: finalProductId,              // Resolved BIGINT id from either direct id or codigo_produto lookup
         compartment_id: compartmentId,           // UUID from database lookup
         tipo: finalTipo,
