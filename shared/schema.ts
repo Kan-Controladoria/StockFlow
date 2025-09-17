@@ -91,6 +91,11 @@ export const insertMovementSchema = createInsertSchema(movements).pick({
   qty: true,
 });
 
+// Relaxed schema for API requests that allows product_id as string for conversion
+export const movementRequestSchema = insertMovementSchema.extend({
+  product_id: z.union([z.number().int().positive(), z.string().min(1)])
+});
+
 // Types
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type Profile = typeof profiles.$inferSelect;

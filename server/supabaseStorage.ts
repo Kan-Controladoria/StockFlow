@@ -520,25 +520,29 @@ export class SupabaseStorage {
   }
 
   async createMovement(movement: Omit<SupabaseMovement, 'id' | 'timestamp' | 'obs'>): Promise<SupabaseMovement> {
+    // Normalize IDs to numbers first
+    const productId = typeof movement.product_id === 'string' ? parseInt(movement.product_id, 10) : movement.product_id;
+    const compartmentId = typeof movement.compartment_id === 'string' ? parseInt(movement.compartment_id as any, 10) : movement.compartment_id;
+    
     console.log('🗺 Movement creation with BIGINT IDs:', {
       user_id: movement.user_id,
       user_id_type: typeof movement.user_id,
-      product_id: movement.product_id, 
-      product_id_type: typeof movement.product_id,
-      compartment_id: movement.compartment_id,
-      compartment_id_type: typeof movement.compartment_id,
+      product_id: productId, 
+      product_id_type: typeof productId,
+      compartment_id: compartmentId,
+      compartment_id_type: typeof compartmentId,
       tipo: movement.tipo,
       qty: movement.qty,
       qty_type: typeof movement.qty
     });
     
     // BIGINT validation for compartment_id and product_id
-    if (!this.isValidBigIntId(movement.compartment_id)) {
-      throw new Error(`Invalid compartment_id - must be positive BIGINT: ${movement.compartment_id} (${typeof movement.compartment_id})`);
+    if (!this.isValidBigIntId(compartmentId)) {
+      throw new Error(`Invalid compartment_id - must be positive BIGINT: ${compartmentId} (${typeof compartmentId})`);
     }
     
-    if (!this.isValidBigIntId(movement.product_id)) {
-      throw new Error(`Invalid product_id - must be positive BIGINT: ${movement.product_id} (${typeof movement.product_id})`);
+    if (!this.isValidBigIntId(productId)) {
+      throw new Error(`Invalid product_id - must be positive BIGINT: ${productId} (${typeof productId})`);
     }
     
     // UUID validation for user_id
@@ -554,8 +558,8 @@ export class SupabaseStorage {
     // Movement data with correct types
     const movementData = {
       user_id: movement.user_id,        // UUID string
-      product_id: movement.product_id,  // BIGINT number
-      compartment_id: movement.compartment_id, // BIGINT number
+      product_id: productId,            // BIGINT number (normalized)
+      compartment_id: compartmentId,    // BIGINT number (normalized)
       tipo: movement.tipo,
       qty: movement.qty
     };

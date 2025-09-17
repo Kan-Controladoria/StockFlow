@@ -1017,7 +1017,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (product) {
             // Found by codigo_produto
-            finalProductId = product.id;
+            finalProductId = parseInt(product.id.toString(), 10);
             console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
           } else {
             // Not found by codigo_produto, try as direct ID
@@ -1037,7 +1037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const product = await supabaseStorage.findProductByCode(product_id);
           
           if (product) {
-            finalProductId = product.id;
+            finalProductId = parseInt(product.id.toString(), 10);
             console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
           } else {
             return res.status(400).json({ error: "Produto não encontrado" });
