@@ -1010,15 +1010,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (product) {
           // Found by codigo_produto
-          finalProductId = parseInt(product.id, 10);
+          finalProductId = product.id;
           console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
         } else if (/^\d+$/.test(product_id)) {
           // Not found by codigo_produto, but it's numeric - try as direct ID
           console.log(`🔍 [MOVEMENT] Not found by codigo_produto, trying as direct ID: ${product_id}`);
-          finalProductId = parseInt(product_id, 10);
-          console.log(`✅ [MOVEMENT] Using string "${product_id}" as direct ID: ${finalProductId}`);
+          const numericId = parseInt(product_id, 10);
+          
+          // Validate if the ID exists in the database
+          const productById = await supabaseStorage.getProduct(numericId);
+          if (productById) {
+            finalProductId = numericId;
+            console.log(`✅ [MOVEMENT] Using string "${product_id}" as direct ID: ${finalProductId}`);
+          } else {
+            return res.status(400).json({ error: "Produto não encontrado" });
+          }
         } else {
-          return res.status(400).json({ error: `Product not found with codigo_produto: ${product_id}` });
+          return res.status(400).json({ error: "Produto não encontrado" });
         }
       } else {
         return res.status(400).json({ error: "product_id must be either a number (id) or string (codigo_produto)" });
