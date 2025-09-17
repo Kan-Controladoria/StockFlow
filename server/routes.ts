@@ -999,21 +999,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Resolve product_id: accept both id (BIGINT) and codigo_produto (string)
       let finalProductId: number;
       
-      if (typeof product_id === 'number' || (typeof product_id === 'string' && /^\d+$/.test(product_id))) {
-        // If it's a number or numeric string, use as direct id
-        finalProductId = typeof product_id === 'number' ? product_id : parseInt(product_id, 10);
+      if (typeof product_id === 'number') {
+        // Direct number, use as ID
+        finalProductId = product_id;
         console.log(`🔍 [MOVEMENT] Using direct product ID: ${finalProductId}`);
       } else if (typeof product_id === 'string') {
-        // If it's a string, look up by codigo_produto
+        // String (numeric or alphanumeric), always try codigo_produto first
         console.log(`🔍 [MOVEMENT] Looking up product by codigo_produto: ${product_id}`);
         const product = await supabaseStorage.findProductByCode(product_id);
         
-        if (!product) {
+        if (product) {
+          // Found by codigo_produto
+          finalProductId = parseInt(product.id, 10);
+          console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
+        } else if (/^\d+$/.test(product_id)) {
+          // Not found by codigo_produto, but it's numeric - try as direct ID
+          console.log(`🔍 [MOVEMENT] Not found by codigo_produto, trying as direct ID: ${product_id}`);
+          finalProductId = parseInt(product_id, 10);
+          console.log(`✅ [MOVEMENT] Using string "${product_id}" as direct ID: ${finalProductId}`);
+        } else {
           return res.status(400).json({ error: `Product not found with codigo_produto: ${product_id}` });
         }
-        
-        finalProductId = parseInt(product.id, 10);
-        console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
       } else {
         return res.status(400).json({ error: "product_id must be either a number (id) or string (codigo_produto)" });
       }
