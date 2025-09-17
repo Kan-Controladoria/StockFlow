@@ -149,52 +149,51 @@ export class SupabaseStorage {
     try {
       console.log('🌱 [RECOVERY] Seeding missing critical data...');
       
-      // Seed compartment 3B7 if missing
-      const compartment3B7Seed = `
-        INSERT INTO compartments (address, corredor, linha, coluna) 
-        VALUES ('3B7', 3, 'B', 7) 
-        ON CONFLICT (address) DO UPDATE SET
-          corredor = EXCLUDED.corredor,
-          linha = EXCLUDED.linha,
-          coluna = EXCLUDED.coluna
-      `;
+      // Seed compartment 3B7 if missing - check first to avoid conflicts
+      const existing3B7 = await this.query('SELECT id FROM compartments WHERE address = $1', ['3B7']);
+      if (existing3B7.length === 0) {
+        await this.query(
+          'INSERT INTO compartments (address, corredor, linha, coluna) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4)',
+          ['3B7', 3, 'B', 7]
+        );
+        console.log('✅ Compartment 3B7 seeded (auto-generated ID)');
+      } else {
+        console.log('📋 Compartment 3B7 already exists, skipping');
+      }
       
-      await this.query(compartment3B7Seed);
-      console.log('✅ Compartment 3B7 seeded (auto-generated ID)');
+      // Seed test product if missing - check first to avoid conflicts
+      const existingProduct = await this.query('SELECT id FROM products WHERE codigo_barras = $1', ['UNIFIED3B7_2025']);
+      if (existingProduct.length === 0) {
+        await this.query(
+          'INSERT INTO products (codigo_barras, codigo_produto, produto, departamento, categoria, subcategoria, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+          ['UNIFIED3B7_2025', 'PROD_UNIFIED3B7', 'Test Product 3B7', 'Test Dept', 'Test Cat', 'Test Sub']
+        );
+        console.log('✅ Test product seeded (auto-generated ID)');
+      } else {
+        console.log('📋 Test product already exists, skipping');
+      }
       
-      // Seed test product if missing
-      const product6Seed = `
-        INSERT INTO products (codigo_barras, codigo_produto, produto, departamento, categoria, subcategoria, created_at, updated_at) 
-        VALUES ('UNIFIED3B7_2025', 'PROD_UNIFIED3B7', 'Test Product 3B7', 'Test Dept', 'Test Cat', 'Test Sub', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        ON CONFLICT (codigo_barras) DO UPDATE SET
-          codigo_produto = EXCLUDED.codigo_produto,
-          produto = EXCLUDED.produto,
-          departamento = EXCLUDED.departamento,
-          categoria = EXCLUDED.categoria,
-          subcategoria = EXCLUDED.subcategoria,
-          updated_at = CURRENT_TIMESTAMP
-      `;
+      // Seed basic test compartments - check each one individually
+      const basicCompartments = [
+        ['1A1', 1, 'A', 1],
+        ['1A2', 1, 'A', 2], 
+        ['2A1', 2, 'A', 1],
+        ['3B6', 3, 'B', 6],
+        ['3B8', 3, 'B', 8]
+      ];
       
-      await this.query(product6Seed);
-      console.log('✅ Test product seeded (auto-generated ID)');
-      
-      // Seed a few basic test compartments for stability
-      const basicCompartmentsSeed = `
-        INSERT INTO compartments (address, corredor, linha, coluna) VALUES
-        ('1A1', 1, 'A', 1),
-        ('1A2', 1, 'A', 2),
-        ('2A1', 2, 'A', 1),
-        ('3B6', 3, 'B', 6),
-        ('3B7', 3, 'B', 7),
-        ('3B8', 3, 'B', 8)
-        ON CONFLICT (address) DO UPDATE SET
-          corredor = EXCLUDED.corredor,
-          linha = EXCLUDED.linha,
-          coluna = EXCLUDED.coluna
-      `;
-      
-      await this.query(basicCompartmentsSeed);
-      console.log('✅ Basic compartments seeded with auto-generated IDs (1A1, 1A2, 2A1, 3B6, 3B7, 3B8)');
+      for (const [address, corredor, linha, coluna] of basicCompartments) {
+        const existing = await this.query('SELECT id FROM compartments WHERE address = $1', [address]);
+        if (existing.length === 0) {
+          await this.query(
+            'INSERT INTO compartments (address, corredor, linha, coluna) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4)',
+            [address, corredor, linha, coluna]
+          );
+          console.log(`✅ Compartment ${address} seeded (auto-generated ID)`);
+        } else {
+          console.log(`📋 Compartment ${address} already exists, skipping`);
+        }
+      }
       
     } catch (error: any) {
       console.error('❌ Data seeding failed:', error.message);
