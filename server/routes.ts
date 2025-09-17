@@ -996,6 +996,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields: product_id, compartment_id/code, tipo/type, qty/quantidade" });
       }
       
+      // Resolve product_id: accept both id (BIGINT) and codigo_produto (string)
+      let finalProductId: number;
+      
+      if (typeof product_id === 'number' || (typeof product_id === 'string' && /^\d+$/.test(product_id))) {
+        // If it's a number or numeric string, use as direct id
+        finalProductId = typeof product_id === 'number' ? product_id : parseInt(product_id, 10);
+        console.log(`🔍 [MOVEMENT] Using direct product ID: ${finalProductId}`);
+      } else if (typeof product_id === 'string') {
+        // If it's a string, look up by codigo_produto
+        console.log(`🔍 [MOVEMENT] Looking up product by codigo_produto: ${product_id}`);
+        const product = await supabaseStorage.findProductByCode(product_id);
+        
+        if (!product) {
+          return res.status(400).json({ error: `Product not found with codigo_produto: ${product_id}` });
+        }
+        
+        finalProductId = parseInt(product.id, 10);
+        console.log(`✅ [MOVEMENT] Resolved codigo_produto "${product_id}" to ID: ${finalProductId}`);
+      } else {
+        return res.status(400).json({ error: "product_id must be either a number (id) or string (codigo_produto)" });
+      }
+      
       // Get or create default user for movements (since user_id is required)
       const defaultUser = await supabaseStorage.getOrCreateDefaultUser();
       
@@ -1005,7 +1027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Map fields to Supabase movements table structure
       const movementData = {
         user_id: user_id || defaultUser.id,      // Required field in movements table
-        product_id: product_id,                  // 'product_id' na tabela movements
+        product_id: finalProductId,              // Resolved BIGINT id from either direct id or codigo_produto lookup
         compartment_id: compartmentId,           // UUID from database lookup
         tipo: finalTipo,
         qty: finalQuantity                       // 'qty' na tabela movements
