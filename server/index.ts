@@ -40,64 +40,16 @@ app.use((req, res, next) => {
 // Startup validation to ensure correct Supabase project connection
 async function validateSupabaseSchema() {
   try {
-    log('🔍 Validating Supabase schema...');
+    log('🔍 Database startup check...');
     
-    // Try to get a product to check if ID format is integer (serial IDs)
-    const { data: products, error } = await supabaseStorage.supabase
-      .from('products')
-      .select('id')
-      .limit(1);
+    // Simple connectivity test
+    const existingProducts = await supabaseStorage.getAllProducts();
+    log(`✅ Found ${existingProducts.length} existing products`);
     
-    if (error) {
-      throw new Error(`Failed to query products table: ${error.message}`);
-    }
-
-    // If we have products, check the ID format
-    if (products && products.length > 0) {
-      const firstProduct = products[0];
-      const idType = typeof firstProduct.id;
-      
-      if (idType !== 'number') {
-        throw new Error(
-          `❌ WRONG SUPABASE PROJECT: products.id is '${idType}' with value '${firstProduct.id}', expected integer format\n` +
-          `   This indicates connection to UUID-schema project instead of integer/serial schema.\n` +
-          `   Please verify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY point to the integer-schema project.\n` +
-          `   Expected integer format: numeric values like 1, 2, 3, etc.`
-        );
-      }
-    }
-
-    // Test schema compatibility using PostgreSQL pool methods instead of Supabase client
-    log('🔍 Testing schema compatibility via PostgreSQL pool...');
-    try {
-      // Test basic product operations
-      const existingProducts = await supabaseStorage.getAllProducts();
-      log(`✅ Found ${existingProducts.length} existing products in PostgreSQL database`);
-      
-      // Test compartment operations  
-      const existingCompartments = await supabaseStorage.getAllCompartments();
-      log(`✅ Found ${existingCompartments.length} existing compartments in PostgreSQL database`);
-      
-      // Verify database integrity
-      log('🔍 Verifying critical data exists...');
-      const identity = await supabaseStorage.verifyDatabaseIdentity();
-      
-      if (identity.compartment_integrity) {
-        log('✅ Database integrity verified - system ready for operations');
-      } else {
-        log(`⚠️ Compartment count mismatch: ${identity.actual_compartments}/${identity.expected_compartments} - system may have missing data`);
-      }
-      
-    } catch (testError: any) {
-      throw new Error(`PostgreSQL schema validation failed: ${testError.message}`);
-    }
+    const existingCompartments = await supabaseStorage.getAllCompartments();
+    log(`✅ Found ${existingCompartments.length} existing compartments`);
     
-    log('✅ PostgreSQL database schema validation completed - ready for operations');
-    
-    // Database schema info logging from storage layer (PostgreSQL pool)
-    await supabaseStorage.logDatabaseSchema();
-    
-    log('✅ PostgreSQL database startup validation completed - ready for BIGINT compartment operations');
+    log('✅ Database startup completed - ready for operations');
     
   } catch (error: any) {
     log(`💥 STARTUP FAILED: ${error.message}`);

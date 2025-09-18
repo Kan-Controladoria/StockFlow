@@ -1,0 +1,95 @@
+### TESTE PROFILES
+GET http://localhost:3000/api/profiles
+
+### Criar profile
+POST http://localhost:3000/api/profiles
+Content-Type: application/json
+
+{
+  "email": "teste@superkan.com",
+  "full_name": "Usuário Teste"
+}
+
+---
+
+### TESTE PRODUCTS
+GET http://localhost:3000/api/products
+
+### Criar produto
+POST http://localhost:3000/api/products
+Content-Type: application/json
+
+{
+  "codigo_barras": "7891234567890",
+  "produto": "Produto Teste",
+  "codigo_produto": "20100",
+  "departamento": "Alimentos",
+  "categoria": "Mercearia",
+  "subcategoria": "Massas"
+}
+
+### Buscar produto criado (ajusta ID depois de criar)
+GET http://localhost:3000/api/products/1
+
+---
+
+### TESTE COMPARTMENTS
+GET http://localhost:3000/api/compartments
+
+### Criar compartimento
+POST http://localhost:3000/api/compartments
+Content-Type: application/json
+
+{
+  "corredor": 1,
+  "linha": "A",
+  "coluna": 3
+}
+
+---
+
+### TESTE STOCK
+GET http://localhost:3000/api/stock
+
+### Inserir estoque
+POST http://localhost:3000/api/stock
+Content-Type: application/json
+
+{
+  "compartment_id": 1,
+  "product_id": 1,
+  "quantity": 50
+}
+
+### Atualizar estoque
+PUT http://localhost:3000/api/stock/1
+Content-Type: application/json
+
+{
+  "quantity": 80
+}
+
+### Deletar estoque
+DELETE http://localhost:3000/api/stock/1
+
+---
+
+### TESTE MOVEMENTS
+GET http://localhost:3000/api/movements
+
+### Criar movimento
+POST http://localhost:3000/api/movements
+Content-Type: application/json
+
+{
+  "user_id": "00000000-0000-0000-0000-000000000001", 
+  "product_id": 1,
+  "compartment_id": 1,
+  "tipo": "ENTRADA",
+  "qty": 10
+}
+
+---
+
+### TESTE REPORTS
+GET http://localhost:3000/api/reports/stats
