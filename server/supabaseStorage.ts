@@ -192,10 +192,17 @@ async function createMovement(data: any) {
 async function getStats() {
   const totalProducts = (await pool.query("SELECT COUNT(*) FROM products")).rows[0].count;
   const totalMovements = (await pool.query("SELECT COUNT(*) FROM movements")).rows[0].count;
+
+  const compartmentsWithStock = (await pool.query(
+    `SELECT COUNT(DISTINCT compartment_id) AS count
+     FROM stock_by_compartment
+     WHERE quantity > 0`
+  )).rows[0].count;
+
   return {
     totalProducts: parseInt(totalProducts, 10),
     monthlyMovements: parseInt(totalMovements, 10),
-    compartmentsWithStock: 0 // ainda pode ser detalhado
+    compartmentsWithStock: parseInt(compartmentsWithStock, 10)
   };
 }
 
