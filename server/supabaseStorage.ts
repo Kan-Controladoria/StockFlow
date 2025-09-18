@@ -15,15 +15,15 @@ console.log("✅ Connected to PostgreSQL via pool");
 
 // ========== PROFILES ==========
 async function getAllProfiles() {
-  const { rows } = await pool.query("SELECT id, full_name, email, role FROM profiles ORDER BY id");
+  const { rows } = await pool.query("SELECT id, full_name, email FROM profiles ORDER BY id");
   return rows;
 }
 
 async function createUser(userData: { email: string; full_name: string }) {
   const { rows } = await pool.query(
-    `INSERT INTO profiles (email, full_name, role)
-     VALUES ($1, $2, 'user')
-     RETURNING id, full_name, email, role`,
+    `INSERT INTO profiles (email, full_name)
+     VALUES ($1, $2)
+     RETURNING id, full_name, email`,
     [userData.email, userData.full_name]
   );
   return rows[0];
