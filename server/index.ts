@@ -1,63 +1,56 @@
-import express from "express"; 
-import pool from "./db"; // conexão ao Neon (ajusta o caminho se for diferente)
+import express from "express";
+import bodyParser from "body-parser";
+import pkg from "pg";
 import cors from "cors";
 
+const { Pool } = pkg;
+
 const app = express();
-app.use(express.json());
-app.use(cors()); // libera acesso do frontend (CORS)
+app.use(cors());
+app.use(bodyParser.json());
 
-// rota de saúde
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
+// conexão com o banco
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
-// rota de relatórios
-app.get("/api/reports/stats", async (_req, res) => {
-  try {
-    const totalProd = await pool.query("SELECT COUNT(*) FROM products");
-    const totalMov = await pool.query("SELECT COUNT(*) FROM movements");
-    res.json({
-      products: Number(totalProd.rows[0].count),
-      movements: Number(totalMov.rows[0].count)
-    });
-  } catch (err: any) {
-    console.error("❌ Stats error:", err.message);
-    res.status(503).json({ error: "DB not ready" });
-  }
+// rota de teste
+app.get("/", (_req, res) => {
+  res.send("API funcionando!");
 });
 
-// rota de produtos
+// rota para listar produtos
 app.get("/api/products", async (_req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT id, codigo_produto, descricao FROM products ORDER BY id ASC"
-    );
+    const result = await pool.query("SELECT id, codigo_produto, descricao FROM products");
     res.json(result.rows);
-  } catch (err: any) {
-    console.error("❌ Products error:", err.message);
+  } catch (err) {
+    console.error("Erro ao buscar produtos:", err);
     res.status(500).json({ error: "Erro ao buscar produtos" });
   }
 });
 
-// rota de movimentos corrigida (sem user_id)
+// rota para criar movimentação (sem user_id)
 app.post("/api/movements", async (req, res) => {
   try {
     const { product_id, type, quantity } = req.body;
 
     const result = await pool.query(
-      "INSERT INTO movements (product_id, type, quantity) VALUES ($1, $2, $3) RETURNING *",
+      `INSERT INTO movements (product_id, type, quantity, created_at) 
+       VALUES ($1, $2, $3, NOW()) RETURNING *`,
       [product_id, type, quantity]
     );
 
     res.json(result.rows[0]);
-  } catch (err: any) {
-    console.error("❌ Movement error:", err.message);
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    console.error("Erro ao inserir movimentação:", err);
+    res.status(500).json({ error: "Erro ao inserir movimentação" });
   }
 });
 
-// porta dinâmica para Render
+// servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
