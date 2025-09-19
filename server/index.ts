@@ -1,93 +1,47 @@
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import { supabaseStorage } from "./supabaseStorage";
+import express from "express";
+import pool from "./db"; // conexão ao Neon (ajusta o caminho se for diferente)
 
 const app = express();
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
+// rota de saúde
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
 });
 
-// Startup validation to ensure correct Supabase project connection
-async function validateSupabaseSchema() {
+// rota de relatórios
+app.get("/api/reports/stats", async (_req, res) => {
   try {
-    log('🔍 Database startup check...');
-    
-    // Simple connectivity test
-    const existingProducts = await supabaseStorage.getAllProducts();
-    log(`✅ Found ${existingProducts.length} existing products`);
-    
-    const existingCompartments = await supabaseStorage.getAllCompartments();
-    log(`✅ Found ${existingCompartments.length} existing compartments`);
-    
-    log('✅ Database startup completed - ready for operations');
-    
-  } catch (error: any) {
-    log(`💥 STARTUP FAILED: ${error.message}`);
-    process.exit(1);
+    const totalProd = await pool.query("SELECT COUNT(*) FROM products");
+    const totalMov = await pool.query("SELECT COUNT(*) FROM movements");
+    res.json({
+      products: Number(totalProd.rows[0].count),
+      movements: Number(totalMov.rows[0].count)
+    });
+  } catch (err: any) {
+    console.error("❌ Stats error:", err.message);
+    res.status(503).json({ error: "DB not ready" });
   }
-}
+});
 
-(async () => {
-  await validateSupabaseSchema();
-  const server = await registerRoutes(app);
-
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+// rota de movimentos
+app.post("/movements", async (req, res) => {
+  try {
+    const { product_id, type, quantity } = req.body;
+    const result = await pool.query(
+      "INSERT INTO movements (product_id, type, quantity) VALUES ($1, $2, $3) RETURNING *",
+      [product_id, type, quantity]
+    );
+    res.json(result.rows[0]);
+  } catch (err: any) {
+    console.error("❌ Movement error:", err.message);
+    res.status(500).json({ error: "Erro ao registrar movimento" });
   }
+});
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
-})();
+// porta dinâmica para Render
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
