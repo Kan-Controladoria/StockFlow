@@ -1,12 +1,12 @@
 import express from "express";
-import cors from "cors";          // <-- IMPORTANTE: adiciona o CORS
-import pool from "./db";          // conexão ao Neon (ajusta o caminho se for diferente)
+import pool from "./db"; // conexão ao Neon
+import cors from "cors"; // <-- precisamos instalar isso
 
 const app = express();
 
-// Habilita JSON e CORS
+// habilita CORS para todas as origens
+app.use(cors());
 app.use(express.json());
-app.use(cors());                  // <-- PERMITE que navegadores externos (ex: teu teste.html) acessem a API
 
 // rota de saúde
 app.get("/api/health", (_req, res) => {
@@ -32,11 +32,16 @@ app.get("/api/reports/stats", async (_req, res) => {
 app.post("/api/movements", async (req, res) => {
   try {
     const { product_id, type, quantity } = req.body;
+    if (!product_id || !type || !quantity) {
+      return res.status(400).json({ error: "Campos obrigatórios: product_id, type, quantity" });
+    }
+
     const result = await pool.query(
       "INSERT INTO movements (product_id, type, quantity) VALUES ($1, $2, $3) RETURNING *",
       [product_id, type, quantity]
     );
-    res.json(result.rows[0]);
+
+    res.status(201).json(result.rows[0]);
   } catch (err: any) {
     console.error("❌ Movement error:", err.message);
     res.status(500).json({ error: "Erro ao registrar movimento" });
@@ -48,5 +53,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
 
 
