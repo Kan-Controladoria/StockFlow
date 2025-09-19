@@ -1,8 +1,12 @@
 import express from "express";
-import pool from "./db"; // conexão ao Neon (ajusta o caminho se for diferente)
+import cors from "cors";          // <-- IMPORTANTE: adiciona o CORS
+import pool from "./db";          // conexão ao Neon (ajusta o caminho se for diferente)
 
 const app = express();
+
+// Habilita JSON e CORS
 app.use(express.json());
+app.use(cors());                  // <-- PERMITE que navegadores externos (ex: teu teste.html) acessem a API
 
 // rota de saúde
 app.get("/api/health", (_req, res) => {
@@ -25,7 +29,7 @@ app.get("/api/reports/stats", async (_req, res) => {
 });
 
 // rota de movimentos
-app.post("/movements", async (req, res) => {
+app.post("/api/movements", async (req, res) => {
   try {
     const { product_id, type, quantity } = req.body;
     const result = await pool.query(
@@ -44,4 +48,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
 
