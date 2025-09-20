@@ -115,4 +115,26 @@ app.get("/api/balance/:id", async (req, res) => {
     const { id } = req.params;
 
     const entradas = await pool.query(
-      "SELECT COALESCE(SUM(quantidade),0) as total FROM movements WHERE product_id = $1 AND tipo = 'en_
+      "SELECT COALESCE(SUM(quantidade),0) as total FROM movements WHERE product_id = $1 AND tipo = 'entrada'",
+      [id]
+    );
+    const saidas = await pool.query(
+      "SELECT COALESCE(SUM(quantidade),0) as total FROM movements WHERE product_id = $1 AND tipo = 'saida'",
+      [id]
+    );
+
+    const saldo = Number(entradas.rows[0].total) - Number(saidas.rows[0].total);
+
+    res.json({ product_id: id, saldo });
+  } catch (err: any) {
+    console.error("❌ GET /api/balance/:id ->", err.message);
+    res.status(500).json({ error: "Erro ao calcular saldo" });
+  }
+});
+
+// --------------------- Start Server ---------------------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+});
+
