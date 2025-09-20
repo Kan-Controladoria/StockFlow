@@ -1,91 +1,97 @@
 import express from "express";
 import cors from "cors";
-import pool from "./db"; // conexão ao Neon (DATABASE_URL)
+import pool from "./db"; // conexão Neon via DATABASE_URL
 
-// ---------------------------------
-// APP / Middlewares
-// ---------------------------------
 const app = express();
-app.use(cors()); // libera chamadas do file:// e de outros domínios
+app.use(cors());
 app.use(express.json());
 
-// Utilitário de log para POSTs
-function logReq(path: string, body: any) {
-  console.log(`➡️  ${path} body=`, JSON.stringify(body));
+function log(label: string, data?: any) {
+  const stamp = new Date().toISOString();
+  if (data !== undefined) {
+    console.log(`[${stamp}] ${label}:`, typeof data === "string" ? data : JSON.stringify(data));
+  } else {
+    console.log(`[${stamp}] ${label}`);
+  }
 }
 
-// ---------------------------------
-// Healthcheck
-// ---------------------------------
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
-});
+// -------------------- Health
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// ---------------------------------
-// PRODUCTS
-// ---------------------------------
+// -------------------- Products
 app.get("/api/products", async (_req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT id, codigo_produto, descricao FROM products ORDER BY id ASC"
     );
+    log("GET /api/products -> rows", rows);
     res.json(rows);
   } catch (err: any) {
-    console.error("❌ /api/products GET:", err.message);
+    log("ERR GET /api/products", err.message);
     res.status(500).json({ error: "Erro ao buscar produtos" });
+  }
+});
+
+// debug auxiliar: contagem rápida
+app.get("/api/products/count", async (_req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT COUNT(*)::int AS count FROM products");
+    res.json(rows[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: "Erro ao contar produtos" });
   }
 });
 
 app.post("/api/products", async (req, res) => {
   try {
-    logReq("/api/products POST", req.body);
-    const { codigo_produto, produto } = req.body;
+    const { codigo_produto, produto, descricao } = req.body;
+    log("POST /api/products body", req.body);
 
-    if (!codigo_produto || !produto) {
-      return res
-        .status(400)
-        .json({ error: "Campos obrigatórios: codigo_produto e produto (descrição)" });
+    const desc = produto ?? descricao; // aceita ambos
+    if (!codigo_produto || !desc) {
+      return res.status(400).json({
+        error: "Campos obrigatórios: codigo_produto e produto (ou descricao)",
+      });
     }
 
-    const { rows } = await pool.query(
-      "INSERT INTO products (codigo_produto, descricao) VALUES ($1, $2) RETURNING id, codigo_produto, descricao",
-      [String(codigo_produto).trim(), String(produto).trim()]
+    const insert = await pool.query(
+      `INSERT INTO products (codigo_produto, descricao)
+       VALUES ($1, $2)
+       RETURNING id, codigo_produto, descricao`,
+      [String(codigo_produto).trim(), String(desc).trim()]
     );
 
-    return res.status(201).json(rows[0]);
+    const row = insert.rows[0];
+    log("POST /api/products inserted", row);
+
+    // retorna o item inserido
+    return res.status(201).json(row);
   } catch (err: any) {
-    console.error("❌ /api/products POST:", err.message);
+    log("ERR POST /api/products", err.message);
     return res.status(500).json({ error: "Erro ao cadastrar produto" });
   }
 });
 
-// ---------------------------------
-// MOVEMENTS
-// ---------------------------------
+// -------------------- Movements
 app.get("/api/movements", async (_req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT m.id,
-              m.product_id,
-              p.descricao AS product_name,
-              m.type,
-              m.quantity,
-              m.created_at
+      `SELECT m.id, m.product_id, p.descricao AS product_name, m.type, m.quantity, m.created_at
          FROM movements m
          JOIN products p ON p.id = m.product_id
         ORDER BY m.id DESC`
     );
     res.json(rows);
   } catch (err: any) {
-    console.error("❌ /api/movements GET:", err.message);
+    log("ERR GET /api/movements", err.message);
     res.status(500).json({ error: "Erro ao buscar movimentos" });
   }
 });
 
 app.post("/api/movements", async (req, res) => {
   try {
-    logReq("/api/movements POST", req.body);
     const { product_id, type, quantity } = req.body;
+    log("POST /api/movements body", req.body);
 
     if (!product_id || !type || quantity == null) {
       return res
@@ -111,14 +117,12 @@ app.post("/api/movements", async (req, res) => {
 
     return res.status(201).json(rows[0]);
   } catch (err: any) {
-    console.error("❌ /api/movements POST:", err.message);
+    log("ERR POST /api/movements", err.message);
     return res.status(500).json({ error: "Erro ao registrar movimento" });
   }
 });
 
-// ---------------------------------
-// STOCK SUMMARY (saldo por produto)
-// ---------------------------------
+// -------------------- Stock summary
 app.get("/api/stock/summary", async (_req, res) => {
   try {
     const { rows } = await pool.query(
@@ -129,8 +133,7 @@ app.get("/api/stock/summary", async (_req, res) => {
                 CASE
                   WHEN m.type = 'entrada' THEN m.quantity
                   WHEN m.type = 'saida'   THEN -m.quantity
-                  ELSE 0
-                END
+                  ELSE 0 END
               ), 0) AS saldo
          FROM products p
     LEFT JOIN movements m ON m.product_id = p.id
@@ -139,15 +142,13 @@ app.get("/api/stock/summary", async (_req, res) => {
     );
     res.json(rows);
   } catch (err: any) {
-    console.error("❌ /api/stock/summary GET:", err.message);
+    log("ERR GET /api/stock/summary", err.message);
     res.status(500).json({ error: "Erro ao calcular saldo" });
   }
 });
 
-// ---------------------------------
-// Start
-// ---------------------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  log(`🚀 Server running on port ${PORT}`);
 });
+
