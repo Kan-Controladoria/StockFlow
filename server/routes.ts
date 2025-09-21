@@ -80,14 +80,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", async (req, res) => {
     try {
+      // usamos apenas os campos realmente existentes no banco
+      const { codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria } = req.body;
+
+      if (!codigo_produto || !produto) {
+        return res.status(400).json({ error: "Campos obrigatórios: codigo_produto e produto" });
+      }
+
       const product = await supabaseStorage.createProduct({
-        codigo_produto: req.body.codigo_produto || req.body.codigo,
-        produto: req.body.produto || req.body.nome,
-        codigo_barras: req.body.codigo_barras || null,
-        departamento: req.body.departamento || null,
-        categoria: req.body.categoria || null,
-        subcategoria: req.body.subcategoria || null
+        codigo_produto,
+        produto,
+        codigo_barras: codigo_barras || null,
+        departamento: departamento || null,
+        categoria: categoria || null,
+        subcategoria: subcategoria || null
       });
+
       res.status(201).json(product);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -98,6 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id) || id <= 0) return res.status(400).json({ error: "ID inválido" });
+
       const updated = await supabaseStorage.updateProduct(id, req.body);
       if (!updated) return res.status(404).json({ error: "Produto não encontrado" });
       res.json(updated);
@@ -110,8 +119,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id) || id <= 0) return res.status(400).json({ error: "ID inválido" });
+
       const deleted = await supabaseStorage.deleteProduct(id);
       if (!deleted) return res.status(404).json({ error: "Produto não encontrado" });
+
       res.json({ message: "Produto deletado", id });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
