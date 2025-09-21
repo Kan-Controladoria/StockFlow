@@ -5,9 +5,9 @@ import { supabaseStorage } from "./supabaseStorage";
 export async function registerRoutes(app: Express): Promise<Server> {
 
   // SECURITY: bloqueia rotas de debug em produção
-  app.use('/api/debug', (req, res, next) => {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(404).json({ error: 'Not found' });
+  app.use("/api/debug", (req, res, next) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(404).json({ error: "Not found" });
     }
     console.log(`🔍 [DEBUG MODE] Debug route accessed: ${req.path}`);
     next();
@@ -80,27 +80,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", async (req, res) => {
     try {
-      // aceita tanto codigo/nome quanto codigo_produto/produto
-      const codigo_produto = req.body.codigo_produto || req.body.codigo;
-      const produto        = req.body.produto || req.body.nome;
+      // usamos apenas os campos realmente existentes no banco
+      const { codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria } = req.body;
 
       if (!codigo_produto || !produto) {
-        return res.status(400).json({ error: "Informe codigo_produto e produto" });
+        return res.status(400).json({ error: "Campos obrigatórios: codigo_produto e produto" });
       }
 
-      const novoProduto = await supabaseStorage.createProduct({
-        codigo_produto: String(codigo_produto),
-        produto: String(produto),
-        codigo_barras: req.body.codigo_barras ?? null,
-        departamento: req.body.departamento ?? null,
-        categoria: req.body.categoria ?? null,
-        subcategoria: req.body.subcategoria ?? null
+      const product = await supabaseStorage.createProduct({
+        codigo_produto,
+        produto,
+        codigo_barras: codigo_barras || null,
+        departamento: departamento || null,
+        categoria: categoria || null,
+        subcategoria: subcategoria || null
       });
 
-      return res.status(201).json(novoProduto);
+      res.status(201).json(product);
     } catch (error: any) {
-      console.error("Erro ao cadastrar produto:", error.message);
-      return res.status(500).json({ error: "Erro interno ao cadastrar produto" });
+      res.status(400).json({ error: error.message });
     }
   });
 
@@ -108,6 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id) || id <= 0) return res.status(400).json({ error: "ID inválido" });
+
       const updated = await supabaseStorage.updateProduct(id, req.body);
       if (!updated) return res.status(404).json({ error: "Produto não encontrado" });
       res.json(updated);
@@ -120,8 +119,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id) || id <= 0) return res.status(400).json({ error: "ID inválido" });
+
       const deleted = await supabaseStorage.deleteProduct(id);
       if (!deleted) return res.status(404).json({ error: "Produto não encontrado" });
+
       res.json({ message: "Produto deletado", id });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
