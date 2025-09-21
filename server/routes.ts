@@ -80,17 +80,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", async (req, res) => {
     try {
-      const product = await supabaseStorage.createProduct({
-        codigo_barras: req.body.codigo_barras || "DEFAULT_BARCODE",
-        produto: req.body.produto || req.body.nome,
-        codigo_produto: req.body.codigo_produto || req.body.codigo,
-        departamento: req.body.departamento,
-        categoria: req.body.categoria,
-        subcategoria: req.body.subcategoria
+      // aceita tanto codigo/nome quanto codigo_produto/produto
+      const codigo_produto = req.body.codigo_produto || req.body.codigo;
+      const produto        = req.body.produto || req.body.nome;
+
+      if (!codigo_produto || !produto) {
+        return res.status(400).json({ error: "Informe codigo_produto e produto" });
+      }
+
+      const novoProduto = await supabaseStorage.createProduct({
+        codigo_produto: String(codigo_produto),
+        produto: String(produto),
+        codigo_barras: req.body.codigo_barras ?? null,
+        departamento: req.body.departamento ?? null,
+        categoria: req.body.categoria ?? null,
+        subcategoria: req.body.subcategoria ?? null
       });
-      res.status(201).json(product);
+
+      return res.status(201).json(novoProduto);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Erro ao cadastrar produto:", error.message);
+      return res.status(500).json({ error: "Erro interno ao cadastrar produto" });
     }
   });
 
