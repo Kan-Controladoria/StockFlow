@@ -13,18 +13,37 @@ export const pool = new Pool({
 
 console.log("✅ Connected to PostgreSQL via pool");
 
+// Helpers
+function normStr(v: any): string | null {
+  if (v === undefined || v === null) return null;
+  return String(v).trim();
+}
+function normOpt(v: any): string | null {
+  const s = normStr(v);
+  return s && s.length > 0 ? s : null;
+}
+
 // ========== PROFILES ==========
 async function getAllProfiles() {
-  const { rows } = await pool.query("SELECT id, full_name, email FROM profiles ORDER BY id");
+  const { rows } = await pool.query(
+    "SELECT id, full_name, email FROM profiles ORDER BY id"
+  );
   return rows;
 }
 
 async function createUser(userData: { email: string; full_name: string }) {
+  const email = normStr(userData.email);
+  const full_name = normOpt(userData.full_name) ?? "";
+
+  if (!email) {
+    throw new Error("email é obrigatório");
+  }
+
   const { rows } = await pool.query(
     `INSERT INTO profiles (email, full_name)
      VALUES ($1, $2)
      RETURNING id, full_name, email`,
-    [userData.email, userData.full_name]
+    [email, full_name]
   );
   return rows[0];
 }
@@ -36,41 +55,87 @@ async function getAllProducts() {
 }
 
 async function searchProducts(search: string) {
+  const term = `%${search}%`;
   const { rows } = await pool.query(
     "SELECT * FROM products WHERE produto ILIKE $1 OR codigo_produto ILIKE $1",
-    [`%${search}%`]
+    [term]
   );
   return rows;
 }
 
 async function getProduct(id: number) {
-  const { rows } = await pool.query("SELECT * FROM products WHERE id = $1", [id]);
+  const { rows } = await pool.query(
+    "SELECT * FROM products WHERE id = $1",
+    [id]
+  );
   return rows[0];
 }
 
 async function createProduct(data: any) {
+  const codigo_produto = normStr(data.codigo_produto);
+  const produto        = normStr(data.produto);
+  const codigo_barras  = normOpt(data.codigo_barras);
+  const departamento   = normOpt(data.departamento);
+  const categoria      = normOpt(data.categoria);
+  const subcategoria   = normOpt(data.subcategoria);
+
+  if (!codigo_produto || !produto) {
+    throw new Error("Informe codigo_produto e produto");
+  }
+
   const { rows } = await pool.query(
     `INSERT INTO products (codigo_barras, produto, codigo_produto, departamento, categoria, subcategoria)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [data.codigo_barras, data.produto, data.codigo_produto, data.departamento, data.categoria, data.subcategoria]
+    [codigo_barras, produto, codigo_produto, departamento, categoria, subcategoria]
   );
   return rows[0];
 }
 
 async function updateProduct(id: number, data: any) {
+  // Atualização dinâmica: só atualiza o que vier
+  const fields: Record<string, any> = {
+    codigo_barras: normOpt(data.codigo_barras),
+    produto:       normOpt(data.produto),
+    codigo_produto:normOpt(data.codigo_produto),
+    departamento:  normOpt(data.departamento),
+    categoria:     normOpt(data.categoria),
+    subcategoria:  normOpt(data.subcategoria),
+  };
+
+  const sets: string[] = [];
+  const vals: any[] = [];
+  let idx = 1;
+
+  for (const [col, val] of Object.entries(fields)) {
+    if (val !== null) {
+      sets.push(`${col} = $${idx++}`);
+      vals.push(val);
+    }
+  }
+
+  if (sets.length === 0) {
+    // nada para atualizar
+    const { rows } = await pool.query("SELECT * FROM products WHERE id = $1", [id]);
+    return rows[0] ?? null;
+  }
+
+  vals.push(id);
   const { rows } = await pool.query(
     `UPDATE products
-     SET codigo_barras=$1, produto=$2, codigo_produto=$3, departamento=$4, categoria=$5, subcategoria=$6
-     WHERE id=$7
+     SET ${sets.join(", ")}
+     WHERE id = $${idx}
      RETURNING *`,
-    [data.codigo_barras, data.produto, data.codigo_produto, data.departamento, data.categoria, data.subcategoria, id]
+    vals
   );
   return rows[0];
 }
 
 async function deleteProduct(id: number) {
-  const { rowCount } = await pool.query("DELETE FROM products WHERE id=$1", [id]);
+  const { rowCount } = await pool.query(
+    "DELETE FROM products WHERE id=$1",
+    [id]
+  );
   return rowCount > 0;
 }
 
@@ -86,11 +151,20 @@ async function getAllCompartments() {
 }
 
 async function createCompartment(data: any) {
+  const corredor = normStr(data.corredor);
+  const linha    = normStr(data.linha);
+  const coluna   = normStr(data.coluna);
+  const address  = normStr(data.address) ?? (corredor && linha && coluna ? `${corredor}${linha}${coluna}` : null);
+
+  if (!corredor || !linha || !coluna) {
+    throw new Error("Campos obrigatórios: corredor, linha, coluna");
+  }
+
   const { rows } = await pool.query(
     `INSERT INTO compartments (corredor, linha, coluna, address)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [data.corredor, data.linha, data.coluna, data.address]
+    [corredor, linha, coluna, address]
   );
   return rows[0];
 }
@@ -132,11 +206,19 @@ async function getAllStock() {
 }
 
 async function createStock(data: any) {
+  const compartment_id = Number(data.compartment_id);
+  const product_id     = Number(data.product_id);
+  const quantity       = Number(data.quantity);
+
+  if (!compartment_id || !product_id || Number.isNaN(quantity)) {
+    throw new Error("Campos obrigatórios: compartment_id, product_id, quantity");
+  }
+
   const { rows } = await pool.query(
     `INSERT INTO stock_by_compartment (compartment_id, product_id, quantity)
      VALUES ($1, $2, $3)
      RETURNING *`,
-    [data.compartment_id, data.product_id, data.quantity]
+    [compartment_id, product_id, quantity]
   );
   return rows[0];
 }
@@ -150,7 +232,10 @@ async function updateStockQuantity(stockId: number, quantity: number) {
 }
 
 async function deleteStock(stockId: number) {
-  const { rowCount } = await pool.query("DELETE FROM stock_by_compartment WHERE id=$1", [stockId]);
+  const { rowCount } = await pool.query(
+    "DELETE FROM stock_by_compartment WHERE id=$1",
+    [stockId]
+  );
   return rowCount > 0;
 }
 
@@ -170,7 +255,7 @@ async function getMovements(filters: any) {
   }
   if (filters.type) {
     query += ` AND tipo=$${idx++}`;
-    values.push(filters.type.toString().toUpperCase());
+    values.push(String(filters.type).toUpperCase());
   }
 
   query += " ORDER BY id DESC";
@@ -179,11 +264,21 @@ async function getMovements(filters: any) {
 }
 
 async function createMovement(data: any) {
+  const user_id       = data.user_id ?? null;
+  const product_id    = Number(data.product_id);
+  const compartment_id= Number(data.compartment_id);
+  const tipo          = String(data.tipo).toUpperCase();
+  const qty           = Number(data.qty);
+
+  if (!product_id || !compartment_id || !tipo || Number.isNaN(qty)) {
+    throw new Error("Campos obrigatórios: product_id, compartment_id, tipo, qty");
+  }
+
   const { rows } = await pool.query(
     `INSERT INTO movements (user_id, product_id, compartment_id, tipo, qty)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [data.user_id, data.product_id, data.compartment_id, data.tipo, data.qty]
+    [user_id, product_id, compartment_id, tipo, qty]
   );
   return rows[0];
 }
