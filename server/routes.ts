@@ -1,242 +1,45 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { supabaseStorage } from "./supabaseStorage";
+import express, { Request, Response } from "express";
+import { createProduct, listProducts } from "./supabaseStorage";
 
-export async function registerRoutes(app: Express): Promise<Server> {
+const router = express.Router();
 
-  // SECURITY: bloqueia rotas de debug em produção
-  app.use('/api/debug', (req, res, next) => {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(404).json({ error: 'Not found' });
+// ✅ Criar produto
+router.post("/products", async (req: Request, res: Response) => {
+  try {
+    const { codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria } = req.body;
+
+    // validação mínima
+    if (!codigo_produto || !produto) {
+      return res.status(400).json({
+        error: "Os campos 'codigo_produto' e 'produto' são obrigatórios."
+      });
     }
-    console.log(`🔍 [DEBUG MODE] Debug route accessed: ${req.path}`);
-    next();
-  });
 
-  // ========== PROFILES ==========
-  app.get("/api/profiles", async (req, res) => {
-    try {
-      const profiles = await supabaseStorage.getAllProfiles();
-      res.json(profiles);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/profiles/:id", async (req, res) => {
-    res.json({
-      id: req.params.id,
-      nome: "Usuário Teste",
-      email: "teste@superkan.com",
-      role: "user"
+    const newProduct = await createProduct({
+      codigo_produto,
+      produto,
+      codigo_barras,
+      departamento,
+      categoria,
+      subcategoria
     });
-  });
 
-  app.post("/api/profiles", async (req, res) => {
-    try {
-      const { email, full_name } = req.body;
-      if (!email || typeof email !== "string") {
-        return res.status(400).json({ error: "email é obrigatório" });
-      }
-      const profile = await supabaseStorage.createUser({
-        email: email.trim(),
-        full_name: full_name ? full_name.trim() : ""
-      });
-      res.status(201).json(profile);
-    } catch (error: any) {
-      if (error.message.includes("unique") || error.message.includes("duplicate")) {
-        return res.status(409).json({ error: "Email já existe" });
-      }
-      res.status(400).json({ error: error.message });
-    }
-  });
+    return res.status(201).json(newProduct);
+  } catch (err: any) {
+    console.error("❌ Erro na rota POST /products:", err.message);
+    return res.status(500).json({ error: "Erro interno ao criar produto." });
+  }
+});
 
-  // ========== PRODUCTS ==========
-  app.get("/api/products", async (req, res) => {
-    try {
-      const { search } = req.query;
-      const products = search
-        ? await supabaseStorage.searchProducts(search as string)
-        : await supabaseStorage.getAllProducts();
-      res.json(products);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+// ✅ Listar produtos
+router.get("/products", async (_req: Request, res: Response) => {
+  try {
+    const products = await listProducts();
+    return res.json(products);
+  } catch (err: any) {
+    console.error("❌ Erro na rota GET /products:", err.message);
+    return res.status(500).json({ error: "Erro interno ao listar produtos." });
+  }
+});
 
-  app.get("/api/products/:id", async (req, res) => {
-    try {
-      const productId = parseInt(req.params.id, 10);
-      if (isNaN(productId) || productId <= 0) {
-        return res.status(400).json({ error: "ID inválido" });
-      }
-      const product = await supabaseStorage.getProduct(productId);
-      if (!product) return res.status(404).json({ error: "Produto não encontrado" });
-      res.json(product);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/products", async (req, res) => {
-    try {
-      // usamos apenas os campos realmente existentes no banco
-      const { codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria } = req.body;
-
-      if (!codigo_produto || !produto) {
-        return res.status(400).json({ error: "Campos obrigatórios: codigo_produto e produto" });
-      }
-
-      const product = await supabaseStorage.createProduct({
-        codigo_produto,
-        produto,
-        codigo_barras: codigo_barras || null,
-        departamento: departamento || null,
-        categoria: categoria || null,
-        subcategoria: subcategoria || null
-      });
-
-      res.status(201).json(product);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.put("/api/products/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      if (isNaN(id) || id <= 0) return res.status(400).json({ error: "ID inválido" });
-
-      const updated = await supabaseStorage.updateProduct(id, req.body);
-      if (!updated) return res.status(404).json({ error: "Produto não encontrado" });
-      res.json(updated);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.delete("/api/products/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      if (isNaN(id) || id <= 0) return res.status(400).json({ error: "ID inválido" });
-
-      const deleted = await supabaseStorage.deleteProduct(id);
-      if (!deleted) return res.status(404).json({ error: "Produto não encontrado" });
-
-      res.json({ message: "Produto deletado", id });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // ========== COMPARTMENTS ==========
-  app.get("/api/compartments", async (req, res) => {
-    try {
-      const compartments = await supabaseStorage.getAllCompartments();
-      res.json(compartments);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/compartments", async (req, res) => {
-    try {
-      const { corredor, linha, coluna } = req.body;
-      if (!corredor || !linha || !coluna) {
-        return res.status(400).json({ error: "Campos obrigatórios: corredor, linha, coluna" });
-      }
-      const address = `${corredor}${linha}${coluna}`;
-      const compartment = await supabaseStorage.createCompartment({ corredor, linha, coluna, address });
-      res.status(201).json(compartment);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // ========== STOCK ==========
-  app.get("/api/stock", async (req, res) => {
-    try {
-      const { productId, compartmentId } = req.query;
-      if (productId) {
-        const qty = await supabaseStorage.getProductStock(parseInt(productId as string, 10));
-        return res.json({ product_id: productId, quantity: qty });
-      }
-      if (compartmentId) {
-        const stock = await supabaseStorage.getCompartmentStock(parseInt(compartmentId as string, 10));
-        return res.json(stock);
-      }
-      const all = await supabaseStorage.getAllStock();
-      res.json(all);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/stock", async (req, res) => {
-    try {
-      const { compartment_id, product_id, quantity } = req.body;
-      if (!compartment_id || !product_id || quantity === undefined) {
-        return res.status(400).json({ error: "Campos obrigatórios: compartment_id, product_id, quantity" });
-      }
-      const stock = await supabaseStorage.createStock({ compartment_id, product_id, quantity });
-      res.status(201).json(stock);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.put("/api/stock/:id", async (req, res) => {
-    try {
-      const stockId = parseInt(req.params.id, 10);
-      const { quantity } = req.body;
-      const updated = await supabaseStorage.updateStockQuantity(stockId, quantity);
-      if (!updated) return res.status(404).json({ error: "Registro não encontrado" });
-      res.json(updated);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.delete("/api/stock/:id", async (req, res) => {
-    try {
-      const stockId = parseInt(req.params.id, 10);
-      const deleted = await supabaseStorage.deleteStock(stockId);
-      if (!deleted) return res.status(404).json({ error: "Registro não encontrado" });
-      res.json({ message: "Registro deletado", id: stockId });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // ========== MOVEMENTS ==========
-  app.get("/api/movements", async (req, res) => {
-    try {
-      const filters = req.query;
-      const movements = await supabaseStorage.getMovements(filters);
-      res.json(movements);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/movements", async (req, res) => {
-    try {
-      const movement = await supabaseStorage.createMovement(req.body);
-      res.status(201).json(movement);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // ========== REPORTS ==========
-  app.get("/api/reports/stats", async (req, res) => {
-    try {
-      const stats = await supabaseStorage.getStats();
-      res.json(stats);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  return createServer(app);
-}
+export default router;
