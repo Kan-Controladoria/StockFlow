@@ -34,14 +34,17 @@ app.get("/api/products", async (_req, res) => {
 
 app.post("/api/products", async (req, res) => {
   try {
-    const { codigo, nome } = req.body;
-    if (!codigo || !nome) {
-      return res.status(400).json({ error: "Informe código e nome do produto" });
+    const { codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria } = req.body;
+
+    if (!codigo_produto || !produto) {
+      return res.status(400).json({ error: "Informe codigo_produto e produto" });
     }
 
     const result = await pool.query(
-      "INSERT INTO products (codigo, nome) VALUES ($1, $2) RETURNING *",
-      [codigo, nome]
+      `INSERT INTO products (codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [codigo_produto, produto, codigo_barras || null, departamento || null, categoria || null, subcategoria || null]
     );
 
     res.json({ message: "Produto cadastrado", produto: result.rows[0] });
@@ -55,7 +58,7 @@ app.post("/api/products", async (req, res) => {
 app.get("/api/movements", async (_req, res) => {
   try {
     const result = await pool.query(
-      `SELECT m.id, m.product_id, p.nome as produto, m.type, m.quantity, m.created_at
+      `SELECT m.id, m.product_id, p.codigo_produto, p.produto, m.type, m.quantity, m.created_at
        FROM movements m
        JOIN products p ON m.product_id = p.id
        ORDER BY m.id DESC`
@@ -69,14 +72,15 @@ app.get("/api/movements", async (_req, res) => {
 
 app.post("/api/movements", async (req, res) => {
   try {
-    const { codigo_produto, tipo, quantidade } = req.body;
+    const { codigo_produto, type, quantity } = req.body;
 
-    if (!codigo_produto || !tipo || !quantidade) {
-      return res.status(400).json({ error: "Informe código_produto, tipo e quantidade" });
+    if (!codigo_produto || !type || !quantity) {
+      return res.status(400).json({ error: "Informe codigo_produto, type e quantity" });
     }
 
+    // Buscar o id do produto pelo codigo_produto
     const productResult = await pool.query(
-      "SELECT id FROM products WHERE codigo = $1",
+      "SELECT id FROM products WHERE codigo_produto = $1",
       [codigo_produto]
     );
 
@@ -86,9 +90,10 @@ app.post("/api/movements", async (req, res) => {
 
     const product_id = productResult.rows[0].id;
 
+    // Inserir movimento
     const insertResult = await pool.query(
       "INSERT INTO movements (product_id, type, quantity) VALUES ($1, $2, $3) RETURNING *",
-      [product_id, tipo, quantidade]
+      [product_id, type, quantity]
     );
 
     res.json({ message: "Movimento registrado", movimento: insertResult.rows[0] });
@@ -102,7 +107,7 @@ app.post("/api/movements", async (req, res) => {
 app.get("/api/balance", async (_req, res) => {
   try {
     const result = await pool.query(`
-      SELECT p.id, p.codigo as codigo_produto, p.nome,
+      SELECT p.id, p.codigo_produto, p.produto,
         COALESCE(SUM(
           CASE WHEN m.type = 'entrada' THEN m.quantity
                WHEN m.type = 'saida' THEN -m.quantity
@@ -110,7 +115,7 @@ app.get("/api/balance", async (_req, res) => {
         ), 0) as saldo
       FROM products p
       LEFT JOIN movements m ON p.id = m.product_id
-      GROUP BY p.id, p.codigo, p.nome
+      GROUP BY p.id, p.codigo_produto, p.produto
       ORDER BY p.id ASC
     `);
 
