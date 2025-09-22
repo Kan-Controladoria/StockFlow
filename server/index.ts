@@ -3,23 +3,17 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import pkg from "pg";
 import swaggerUi from "swagger-ui-express";
-import swaggerJSDoc from "swagger-jsdoc";
+import swaggerJsdoc from "swagger-jsdoc";
 
 const { Pool } = pkg;
-const app = express();
 
-// ------------------------- MIDDLEWARES -------------------------
+// ================= CONFIGURAÇÕES BÁSICAS =================
+const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
 
-// Força UTF-8 nas respostas
-app.use((_req, res, next) => {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  next();
-});
-
-// ------------------------- DB CONFIG -------------------------
+// ------------------------- BANCO -------------------------
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -32,29 +26,37 @@ const swaggerOptions = {
     info: {
       title: "StockFlow API",
       version: "1.0.0",
-      description: "Documentação da API do StockFlow",
+      description: "Documentação da API do StockFlow com Swagger UI",
     },
     servers: [
       {
-        url: process.env.RENDER_EXTERNAL_URL || "http://localhost:3000",
+        url: "https://stockflow-v8aj.onrender.com",
       },
     ],
   },
-  apis: ["./server/index.ts"], // este arquivo contém as rotas
+  apis: ["./server/index.ts"], // 📌 Ajusta se mudar a localização
 };
 
-const swaggerSpec = swaggerJSDoc(swaggerOptions);
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customSiteTitle: "StockFlow API Docs",
+  })
+);
 
 // ------------------------- HEALTH -------------------------
 /**
  * @openapi
  * /api/health:
  *   get:
- *     summary: Verifica se o servidor está online
+ *     summary: Verifica se o servidor está no ar
  *     responses:
  *       200:
- *         description: Servidor funcionando
+ *         description: Retorna ok:true se o servidor estiver rodando
  */
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
@@ -66,8 +68,9 @@ app.get("/api/health", (_req, res) => {
  * /api/products:
  *   get:
  *     summary: Lista todos os produtos
- *   post:
- *     summary: Cadastra um novo produto
+ *     responses:
+ *       200:
+ *         description: Lista de produtos
  */
 app.get("/api/products", async (_req, res) => {
   try {
@@ -79,21 +82,54 @@ app.get("/api/products", async (_req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/products:
+ *   post:
+ *     summary: Cadastra um novo produto
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - codigo_produto
+ *               - produto
+ *             properties:
+ *               codigo_produto:
+ *                 type: string
+ *               produto:
+ *                 type: string
+ *               codigo_barras:
+ *                 type: string
+ *               departamento:
+ *                 type: string
+ *               categoria:
+ *                 type: string
+ *               subcategoria:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Produto criado com sucesso
+ */
 app.post("/api/products", async (req, res) => {
   try {
-    const { codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria } = req.body;
+    const { codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria } =
+      req.body;
 
     if (!codigo_produto || !produto) {
-      return res.status(400).json({ error: "Informe código_produto e produto" });
+      return res.status(400).json({ error: "Informe codigo_produto e produto" });
     }
 
     const result = await pool.query(
       `INSERT INTO products (codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [codigo_produto, produto, codigo_barras || null, departamento || null, categoria || null, subcategoria || null]
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [codigo_produto, produto, codigo_barras, departamento, categoria, subcategoria]
     );
 
-    res.json({ message: "Produto cadastrado", produto: result.rows[0] });
+    res.status(201).json({ message: "Produto cadastrado", produto: result.rows[0] });
   } catch (err) {
     console.error("Erro ao cadastrar produto:", err);
     res.status(500).json({ error: "Erro ao cadastrar produto" });
@@ -106,8 +142,6 @@ app.post("/api/products", async (req, res) => {
  * /api/movements:
  *   get:
  *     summary: Lista todos os movimentos
- *   post:
- *     summary: Registra um movimento (entrada/saída)
  */
 app.get("/api/movements", async (_req, res) => {
   try {
@@ -124,12 +158,20 @@ app.get("/api/movements", async (_req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/movements:
+ *   post:
+ *     summary: Registra um movimento de entrada ou saída
+ */
 app.post("/api/movements", async (req, res) => {
   try {
     const { codigo_produto, type, quantity } = req.body;
 
     if (!codigo_produto || !type || !quantity) {
-      return res.status(400).json({ error: "Informe codigo_produto, type e quantity" });
+      return res
+        .status(400)
+        .json({ error: "Informe codigo_produto, type e quantity" });
     }
 
     const productResult = await pool.query(
@@ -160,7 +202,7 @@ app.post("/api/movements", async (req, res) => {
  * @openapi
  * /api/balance:
  *   get:
- *     summary: Retorna o saldo de todos os produtos
+ *     summary: Mostra o saldo atual de cada produto
  */
 app.get("/api/balance", async (_req, res) => {
   try {
